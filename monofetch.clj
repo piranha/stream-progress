@@ -215,9 +215,11 @@ html {font-family: Helvetica, Arial, sans-serif; font-size: 2rem;}
   (update-info!)
   (alter-var-root #'*server
     (fn [v]
-      (prn v)
       (when v (v))
-      (httpd/run-server app {:port (:port (config) 1301)}))))
+      (let [port (:port (config) 1301)]
+        (println (str "running on http://127.0.0.1:" port))
+        (httpd/run-server app {:port port}))))
+  @(promise))
 
 
 (when (= *file* (System/getProperty "babashka.file"))

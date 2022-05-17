@@ -32,7 +32,7 @@
   (let [query (if (map? query)
                 (sql/format query)
                 query)]
-    (sqlite/query (:db (config)) query)))
+    (sqlite/query (:db (config) "mono.db") query)))
 
 
 (defn o! [query] (first (q! query)))

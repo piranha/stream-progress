@@ -1,13 +1,13 @@
 #!/usr/bin/env bb
 
 (ns monofetch
+  (:import [java.time Instant])
   (:require [clojure.edn :as edn]
             [babashka.deps :as deps]
             [babashka.pods :as pods]
             [cheshire.core :as json]
             [org.httpkit.client :as http]
-            [org.httpkit.server :as httpd]
-            [clojure.string :as str]))
+            [org.httpkit.server :as httpd]))
 
 
 (deps/add-deps
@@ -24,8 +24,10 @@
 
 ;;; Core
 
+(def *config-name ".config.edn")
+
 (defn config []
-  (edn/read-string (slurp ".config.edn")))
+  (edn/read-string (slurp *config-name)))
 
 
 (defn q! [query]
@@ -50,6 +52,11 @@
       (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
 
+(defn balance [in-balance]
+  (- (quot in-balance 100)
+     (:start-balance (config))))
+
+
 ;;; Time
 
 (def DAY (* 3600 24))
@@ -69,6 +76,9 @@
                      :select [[(sql/call :max :updated_at) :updated_at]]})
         txs     (req! (format "/personal/statement/%s/%s"
                         account (or (:updated_at last-tx)
+                                    (some-> (:since (config))
+                                      Instant/parse
+                                      .getEpochSecond)
                                     (- (now) (* 30 DAY)))))]
     (q! {:insert-into :info
          :values      (for [acc accs]
@@ -76,20 +86,21 @@
                          :pan        (first (:maskedPan acc))
                          :send_id    (:sendId acc)
                          :iban       (:iban acc)
-                         :balance    (quot (:balance acc) 100)
+                         :balance    (balance (:balance acc))
                          :updated_at (now)})
          :upsert      {:on-conflict   [:account]
                        :do-update-set [:pan :send_id :iban :balance]}})
-    (q! {:insert-into :tx
-         :values      (for [tx txs]
-                        {:id         (:id tx)
-                         :account    account
-                         :amount     (quot (:amount tx) 100)
-                         :balance    (quot (:balance tx) 100)
-                         :desc       (:description tx)
-                         :comment    (:comment tx)
-                         :created_at (:time tx)
-                         :updated_at (now)})})))
+    (when (seq txs)
+      (q! {:insert-into :tx
+           :values      (for [tx txs]
+                          {:id         (:id tx)
+                           :account    account
+                           :amount     (quot (:amount tx) 100)
+                           :balance    (balance (:balance tx))
+                           :desc       (:description tx)
+                           :comment    (:comment tx)
+                           :created_at (:time tx)
+                           :updated_at (now)})}))))
 
 (comment
   (req! (format "/personal/statement/%s/%s"
@@ -180,10 +191,10 @@
 
 
 (defn progress [req]
-  (let [info    (o! {:from   [:info]
-                     :select [:balance]
-                     :where  [:= :account (:account (config))]})
-        target   (-> (quot (:balance info) 100000) inc (* 100000))
+  (let [info     (o! {:from   [:info]
+                      :select [:balance]
+                      :where  [:= :account (:account (config))]})
+        target   (:target-balance (config))
         maxvalue (o! {:from     [:tx]
                       :select   [:created_at
                                  :amount
@@ -270,9 +281,36 @@ strong {color: white}
 (defonce *server nil)
 
 
-(defn -main []
+(defn -main [& {:strs [json cfg]}]
+  (when cfg
+    (alter-var-root #'*config-name (constantly cfg)))
   (create-schema)
   (update-info!)
+  (when json
+    (let [info     (o! {:from   [:info]
+                        :select [:balance]
+                        :where  [:= :account (:account (config))]})
+          target   (:target-balance (config))
+          maxvalue (o! {:from     [:tx]
+                        :select   [:created_at
+                                   :amount
+                                   :desc
+                                   :comment]
+                        :where    [:= :account (:account (config))]
+                        :order-by [[:amount :desc]
+                                   :created_at]
+                        :limit    1})
+          avgvalue (o! {:from   [:tx]
+                        :select [[(sql/call :avg :amount) :amount]]
+                        :where  [:and
+                                 [:= :account (:account (config))]
+                                 [:> :amount 0]]})]
+      (spit json {:target  target
+                  :amount  (:balance info)
+                  :avg     (:amount avgvalue)
+                  :max     (:amount maxvalue)
+                  :maxname (:desc maxvalue)})))
+  (System/exit 0)
   (alter-var-root #'*server
     (fn [v]
       (when v (v))

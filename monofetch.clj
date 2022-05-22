@@ -72,7 +72,7 @@
   (let [account (:account (config))
         accs    (->> (:accounts (req! "/personal/client-info"))
                      (filter #(= (:id %) account)))
-        last-tx (q! {:from   [:tx]
+        last-tx (o! {:from   [:tx]
                      :select [[(sql/call :max :updated_at) :updated_at]]})
         txs     (req! (format "/personal/statement/%s/%s"
                         account (or (:updated_at last-tx)
@@ -305,11 +305,12 @@ strong {color: white}
                         :where  [:and
                                  [:= :account (:account (config))]
                                  [:> :amount 0]]})]
-      (spit json {:target  target
-                  :amount  (:balance info)
-                  :avg     (:amount avgvalue)
-                  :max     (:amount maxvalue)
-                  :maxname (:desc maxvalue)})))
+      (spit json (json/generate-string
+                   {:target  target
+                    :amount  (:balance info)
+                    :avg     (:amount avgvalue)
+                    :max     (:amount maxvalue)
+                    :maxname (:desc maxvalue)}))))
   (System/exit 0)
   (alter-var-root #'*server
     (fn [v]

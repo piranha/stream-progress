@@ -1,7 +1,8 @@
 #!/usr/bin/env bb
 
 (ns monofetch
-  (:import [java.time Instant])
+  (:import [java.time Instant]
+           [java.nio.file Path])
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.java.io :as io]
@@ -33,17 +34,29 @@
 
 ;;; Core
 
-(def *config-name ".config.edn")
+(def -me (Path/of (.toURI (io/file *file*))))
+
+(defn rel-to-me [path]
+  (str (.resolveSibling -me path)))
+
+
+(def *opts (when *command-line-args* (apply assoc {} *command-line-args*)))
+
+(comment
+  (alter-var-root #'*opts (constantly {"--json" "donation.json"})))
+
 
 (defn config []
-  (edn/read-string (slurp *config-name)))
+  (let [path (get *opts "--cfg" ".config.edn")]
+    (edn/read-string (slurp (rel-to-me path)))))
 
 
 (defn q! [query]
   (let [query (if (map? query)
                 (sql/format query)
-                query)]
-    (sqlite/query (:db (config) "mono.db") query)))
+                query)
+        dbpath (rel-to-me (:db (config) "mono.db"))]
+    (sqlite/query dbpath query)))
 
 
 (defn o! [query] (first (q! query)))
@@ -179,6 +192,16 @@
      :maxname (some-> (:desc maxvalue) (str/replace #"^Від: " ""))}))
 
 
+(defn write-json [path]
+  (let [stats (get-stats)]
+    (spit path (json/generate-string
+                 {:target  (human-n (:target stats))
+                  :amount  (human-n (:balance stats))
+                  :avg     (human-n (:avg stats))
+                  :max     (human-n (:max stats))
+                  :maxname (:maxname stats)}))))
+
+
 ;;; HTTP progress server
 
 
@@ -221,6 +244,7 @@
         donations (q! {:from     [:tx]
                        :select   [:id :amount]
                        :order-by [[:created_at :desc]]
+                       :offset   0
                        :limit    5})
         progress  (* 100 (/ (float (:balance stats)) (:target stats)))]
     (hi/html
@@ -242,7 +266,8 @@
        [:div {:style {:height        "1.36em"
                       :background    "rgba(0, 0, 0, 0.5)"
                       :border-radius "0.68em"}}
-        [:div {:style {:height        "100%"
+        [:div {:id    :progress-bar
+               :style {:height        "100%"
                        :border-radius "0.68em"
                        :background    "#44BE59"
                        :display       "inline-block"
@@ -270,11 +295,12 @@
            [:link {:rel "icon" :href "data:;base64,="}]
            [:meta {:charset "utf-8"}]
            [:meta {:name "viewport" :content "width=device-width,initial-scale=1.0"}]
+           ;;[:script {:src "http://localhost:3000/twinspark.js"}]
            [:script {:src "https://kasta-ua.github.io/twinspark-js/twinspark.js"}]
 
            [:style "
-html {font-family: Helvetica, Arial, sans-serif; color: rgba(255, 255, 255, 0.8); font-weight: 100;
-      font-size: 18px;
+html {font-family: Helvetica, Arial, sans-serif; color: rgba(255, 255, 255, 0.8);
+      font-size: 28px;
       line-height: 1.36em}
 
 strong {color: white}
@@ -291,6 +317,16 @@ strong {color: white}
 .ml-1 {margin-left: 1rem;}
 .nowrap {white-space: nowrap;}
 .overflow-hidden {overflow: hidden;}
+
+.ts-enter {
+  animation: animate-pop 0.3s;
+  animation-timing-function: cubic-bezier(.26, .53, .74, 1.48);
+}
+
+@keyframes animate-pop {
+  0%   { opacity: 0; transform: scale(0.5, 0.5); }
+  100% { opacity: 1; transform: scale(1, 1); }
+}
 "]
            ]
           [:body {:ts-req          "progress"
@@ -323,12 +359,12 @@ strong {color: white}
                " "
                [:strong (format "%s ₴" (:max stats))]]]]]]]))}))
 
+
 (defn webhook [req]
   (let [data    (:data (json/parse-stream
                          (io/reader (:body req) :encoding "UTF-8")
                          true))
         account (:account data)]
-    (prn data)
     (when (= account (:account (config)))
       (let [tx (make-tx account (:statementItem data))]
         (q! {:insert-into :tx
@@ -340,14 +376,11 @@ strong {color: white}
                       [:= :account account]
                       [:or
                        [:< :balance_at (:created_at tx)]
-                       [:= :balance_at nil]]]})))
+                       [:= :balance_at nil]]]}))
+      (when-let [path (get *opts "--json")]
+        (write-json path)))
     {:status 200
      :body   "ok"}))
-
-
-(comment
-  (req! :post "/personal/webhook"
-    {:webhookUrl "https://mono.d.solovyov.net/webhook"}))
 
 
 (defn app [req]
@@ -357,7 +390,7 @@ strong {color: white}
       (log/info method (:uri req))))
   (case (:uri req)
     "/progress" (progress req)
-    "/webhook" (webhook req)
+    "/webhook"  (webhook req)
     {:status 404
      :body   "Not Found\n"}))
 
@@ -365,33 +398,26 @@ strong {color: white}
 (defonce *server nil)
 
 
-(defn -main [& {:strs [--json --server --cfg]}]
-  (when --cfg
-    (alter-var-root #'*config-name (constantly --cfg)))
-
+(defn -main [{:strs [--json --server --webhook]}]
   (create-schema)
   (update-info!)
 
-  (cond
-    --json
-    (let [stats (get-stats)]
-      (spit --json (json/generate-string
-                     {:target  (human-n (:target stats))
-                      :amount  (human-n (:balance stats))
-                      :avg     (human-n (:avg stats))
-                      :max     (human-n (:max stats))
-                      :maxname (:maxname stats)})))
+  (when --webhook
+    (req! :post "/personal/webhook"
+      {:webhookUrl (:webhook (config))}))
 
-    --server
-    (do
-      (alter-var-root #'*server
-        (fn [v]
-          (when v (v))
-          (let [port (:port (config) 1301)]
-            (println (str "running on http://127.0.0.1:" port))
-            (httpd/run-server app {:port port}))))
-      @(promise))))
+  (when --json
+    (write-json --json))
+
+  (when --server
+    (alter-var-root #'*server
+      (fn [v]
+        (when v (v))
+        (let [port (:port (config) 1301)]
+          (println (str "running on http://127.0.0.1:" port))
+          (httpd/run-server app {:port port}))))
+    @(promise)))
 
 
 (when (= *file* (System/getProperty "babashka.file"))
-  (apply -main *command-line-args*))
+  (-main *opts))

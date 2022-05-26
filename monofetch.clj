@@ -6,6 +6,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.java.io :as io]
+            [clojure.stacktrace :as st]
             [babashka.deps :as deps]
             [babashka.pods :as pods]
             [cheshire.core :as json]
@@ -17,7 +18,7 @@
 (deps/add-deps
   '{:deps {honeysql/honeysql         {:mvn/version "1.0.461"}
            nilenso/honeysql-postgres {:mvn/version "0.4.112"}
-           hiccup/hiccup             {:mvn/version "2.0.0-alpha2"}
+           ring/ring                 {:mvn/version "1.9.0"}
            ring/ring-codec           {:mvn/version "1.2.0"}}})
 (pods/load-pod 'org.babashka/go-sqlite3 "0.1.0")
 (require
@@ -26,8 +27,8 @@
   '[honeysql-postgres.format]
   '[hiccup.util :as hutil]
   '[hiccup2.core :as hi]
-  '[ring.util.codec :as codec])
-
+  '[ring.util.codec :as codec]
+  '[ring.middleware.params :as ring-params])
 
 (alter-var-root #'log/*config* #(assoc % :min-level :info))
 
@@ -198,11 +199,15 @@
 (defn write-json [path]
   (let [stats (get-stats)]
     (spit path (json/generate-string
-                 {:target  (human-n (:target stats))
-                  :amount  (human-n (:balance stats))
-                  :avg     (human-n (:avg stats))
-                  :max     (human-n (:max stats))
-                  :maxname (:maxname stats)}))))
+                 {:target (:target stats)
+                  :amount (:balance stats)
+                  :avg    (:avg stats)
+                  :max    (:max stats)
+                  :text   {:target  (human-n (:target stats))
+                           :amount  (human-n (:balance stats))
+                           :avg     (human-n (:avg stats))
+                           :max     (human-n (:max stats))
+                           :maxname (:maxname stats)}}))))
 
 
 ;;; HTTP progress server
@@ -227,6 +232,55 @@
                        :chs  "200x200"
                        :chl  (:donate-url (config) (format "https://send.monobank.ua/%s" sendid))
                        :chld "M|2"}))}]))
+
+
+(defn base [content]
+  (str
+    (hi/html
+      (hutil/raw-string "<!doctype html>\n")
+      [:html
+       [:head
+        [:title "Progress Tracker"]
+        ;;[:meta {:http-equiv "refresh" :content "1"}]
+        [:link {:rel "icon" :href "data:;base64,="}]
+        [:meta {:charset "utf-8"}]
+        [:meta {:name "viewport" :content "width=device-width,initial-scale=1.0"}]
+        ;;[:script {:src "http://localhost:3000/twinspark.js"}]
+        [:script {:src "https://kasta-ua.github.io/twinspark-js/twinspark.js"}]
+
+        [:style "
+html {font-family: Helvetica, Arial, sans-serif;
+      font-size: 28px;
+      line-height: 1.36em}
+
+strong {color: white}
+
+#show {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
+                                         rgba(38, 40, 44, 0) 100%);
+       color: rgba(255, 255, 255, 0.8);
+       position: fixed; bottom:0; left:0; right:0;
+       padding: 0.86em;
+       min-height: 6.86em;}
+
+.shadow { text-shadow: 0 0 10px black; }
+.flex {display: flex; align-items: center;}
+.grow {flex-grow: 1;}
+.justify-between {justify-content: space-between; }
+.ml-1 {margin-left: 1rem;}
+.nowrap {white-space: nowrap;}
+.overflow-hidden {overflow: hidden;}
+
+.ts-enter {
+  animation: animate-pop 0.3s;
+  animation-timing-function: cubic-bezier(.26, .53, .74, 1.48);
+}
+
+@keyframes animate-pop {
+  0%   { opacity: 0; transform: scale(0.5, 0.5); }
+  100% { opacity: 1; transform: scale(1, 1); }
+}
+"]]
+       [:body {} content]])))
 
 
 (defn donation-pill [{:keys [id amount]}]
@@ -282,85 +336,95 @@
           (format "%.2f%%" progress)]]]])))
 
 
-
 (defn progress [req]
   (let [stats (get-stats)]
     {:status  200
      :headers {"Content-Type" "text/html"}
      :body
-     (str
+     (base
        (hi/html
-         (hutil/raw-string "<!doctype html>\n")
-         [:html
-          [:head
-           [:title "Progress Tracker"]
-           ;;[:meta {:http-equiv "refresh" :content "1"}]
-           [:link {:rel "icon" :href "data:;base64,="}]
-           [:meta {:charset "utf-8"}]
-           [:meta {:name "viewport" :content "width=device-width,initial-scale=1.0"}]
-           ;;[:script {:src "http://localhost:3000/twinspark.js"}]
-           [:script {:src "https://kasta-ua.github.io/twinspark-js/twinspark.js"}]
-
-           [:style "
-html {font-family: Helvetica, Arial, sans-serif; color: rgba(255, 255, 255, 0.8);
-      font-size: 28px;
-      line-height: 1.36em}
-
-strong {color: white}
-
-.bg {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%, rgba(38, 40, 44, 0) 100%);
-     position: fixed; bottom:0; left:0; right:0;
-     padding: 0.86em;
-     min-height: 6.86em;}
-
-.shadow { text-shadow: 0 0 10px black; }
-.flex {display: flex; align-items: center;}
-.grow {flex-grow: 1;}
-.justify-between {justify-content: space-between; }
-.ml-1 {margin-left: 1rem;}
-.nowrap {white-space: nowrap;}
-.overflow-hidden {overflow: hidden;}
-
-.ts-enter {
-  animation: animate-pop 0.3s;
-  animation-timing-function: cubic-bezier(.26, .53, .74, 1.48);
-}
-
-@keyframes animate-pop {
-  0%   { opacity: 0; transform: scale(0.5, 0.5); }
-  100% { opacity: 1; transform: scale(1, 1); }
-}
-"]
-           ]
-          [:body {:ts-req          "progress"
-                  :ts-trigger      "load delay 1000"
-                  ;;:ts-trigger      "click"
-                  :ts-req-selector "body"}
-           [:div.bg.flex {:style {:align-items "flex-end"}}
-            [:div.qr {:style {:height        "6.86em"
-                              :width         "6.86em"
-                              :border-radius "0.57em"
-                              :background    "white"}}
-             (qr (:sendid stats))]
+         [:div#show.flex {:ts-req          "progress"
+                          :ts-trigger      "load delay 1000"
+                          ;;:ts-trigger      "click"
+                          :ts-req-selector "#show"
+                          :style           {:align-items "flex-end"}}
+          [:div.qr {:style {:height        "6.86em"
+                            :width         "6.86em"
+                            :border-radius "0.57em"
+                            :background    "white"}}
+           (qr (:sendid stats))]
 
 
-            [:div.flex.justify-between.grow
-             [:div.title.flex.ml-1
-              logo ;; Державний герб України
+          [:div.flex.justify-between.grow
+           [:div.title.flex.ml-1
+            logo ;; Державний герб України
+            [:span.ml-1.shadow
+             "Скануй та " [:br] (:donate-label (config) "допоможи ЗСУ")]]
 
-              [:span.ml-1.shadow
-               "Скануй та " [:br] (:donate-label (config) "допоможи ЗСУ")]]
+           (progress-bar)
 
-             (progress-bar)
+           ;; stats
+           [:div.ml-1.shadow.nowrap
+            {:style {:text-align "right"}}
+            [:div "В середньому " [:strong (format "%d ₴" (:avg stats))]]
+            [:div "Максимум від "
+             [:strong (:maxname stats)]
+             " "
+             [:strong (format "%s ₴" (:max stats))]]]]]))}))
 
-             ;; stats
-             [:div.ml-1.shadow.nowrap
-              {:style {:text-align "right"}}
-              [:div "В середньому " [:strong (format "%d ₴" (:avg stats))]]
-              [:div "Максимум від "
-               [:strong (:maxname stats)]
-               " "
-               [:strong (format "%s ₴" (:max stats))]]]]]]]))}))
+
+(defn input-t [content]
+  (base
+    (hi/html
+      [:form {:method "post" :action "input"}
+       [:input {:type "text" :name "amount" :placeholder "Сума, грн"}]
+       [:input {:type "text" :name "desc" :placeholder "Відправник"}]
+       [:input {:type "text" :name "orig"
+                :placeholder "Оригінальна сума (eg. 120 usd)"}]
+       [:button "Save"]]
+      content)))
+
+
+(defn input [{:keys [request-method form-params]}]
+  (if (= request-method :post)
+    (try
+      (prn (o! {:insert-into :tx
+                :values
+                [{:account    "other"
+                  :id         (str (random-uuid))
+                  :amount     (Long. (get form-params "amount"))
+                  :desc       (get form-params "desc")
+                  :comment    (get form-params "orig")
+                  :created_at (now)
+                  :updated_at (now)}]}))
+      (o! {:insert-into :info
+           :values      [{:account    "other"
+                          :balance_at (now)
+                          :updated_at (now)
+                          :balance    {:from   [:tx]
+                                       :select [(sql/call :sum :amount)]
+                                       :where  [:= :account "other"]}}]
+           :upsert      {:on-conflict   [:account]
+                         :do-update-set [:balance_at :updated_at :balance]}})
+      {:status  301
+       :headers {"Location" "input"}}
+      (catch Exception e
+        (prn "Error" (str e))
+        {:status  400
+         :headers {"Content-Type" "text/html"}
+         :body    (input-t
+                 (hi/html [:code [:pre (with-out-str
+                                         (st/print-stack-trace e))]]))}))
+    (let [txs (q! {:from   [:tx]
+                   :select [:amount :desc :comment]
+                   :where  [:= :account "other"]})]
+      {:status  200
+       :headers {"Content-Type" "text/html"}
+       :body    (input-t
+                  [:table
+                   [:tr [:th "Сума, грн"] [:th "Відправник"] [:th "Оригінальна сума"]]
+                   (for [tx txs]
+                     [:tr [:td (:amount tx)] [:td (:desc tx)] [:td (:comment tx)]])])})))
 
 
 (defn webhook [req]
@@ -389,7 +453,7 @@ strong {color: white}
      :body   "ok"}))
 
 
-(defn app [req]
+(defn -app [req]
   (let [method (.toUpperCase (name (:request-method req)))]
     (if (= method "GET")
       (log/debug method (:uri req))
@@ -397,8 +461,13 @@ strong {color: white}
   (case (:uri req)
     "/progress" (progress req)
     "/webhook"  (webhook req)
+    "/input"    (input req)
     {:status 404
      :body   "Not Found\n"}))
+
+
+(def app (-> -app
+             ring-params/wrap-params))
 
 
 (defonce *server nil)

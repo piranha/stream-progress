@@ -169,7 +169,8 @@
 
 (defn get-stats []
   (let [info     (o! {:from   [:info]
-                      :select [:balance]
+                      :select [:balance
+                               :send_id]
                       :where  [:= :account (:account (config))]})
         target   (:target-balance (config))
         maxvalue (o! {:from     [:tx]
@@ -187,6 +188,7 @@
                                [:= :account (:account (config))]
                                [:> :amount 0]]})]
     {:balance (:balance info)
+     :sendid  (:send_id info)
      :target  target
      :avg     (Math/round (:amount avgvalue))
      :max     (:amount maxvalue)
@@ -216,14 +218,14 @@
        :clip-rule "evenodd",
        :fill-rule "evenodd"}]]))
 
-(def qr
+(defn qr [sendid]
   (hi/html
     [:img {:style {:width "100%"}
            :src   (str "https://chart.googleapis.com/chart?"
                     (codec/form-encode
                       {:cht  "qr"
                        :chs  "200x200"
-                       :chl  "https://fwdays.com/event/stream-zaharchenko#donate"
+                       :chl  (:donate-url (config) (format "https://send.monobank.ua/%s" sendid))
                        :chld "M|2"}))}]))
 
 
@@ -339,7 +341,7 @@ strong {color: white}
                               :width         "6.86em"
                               :border-radius "0.57em"
                               :background    "white"}}
-             qr]
+             (qr (:sendid stats))]
 
 
             [:div.flex.justify-between.grow

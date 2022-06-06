@@ -113,7 +113,8 @@
 
 (defn update-info! []
   (let [account    (:account (config))
-        accs       (->> (:accounts (req! :get "/personal/client-info"))
+        resp       (req! :get "/personal/client-info")
+        accs       (->> (concat (:accounts resp) (:jars resp))
                         (filter #(= (:id %) account)))
         last-tx    (o! {:from   [:tx]
                         :select [[(sql/call :max :updated_at) :updated_at]]})

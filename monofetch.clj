@@ -364,24 +364,27 @@ strong {color: white}
 
 
 (defn webhook [req]
-  (let [data    (:data (json/parse-stream
-                         (io/reader (:body req) :encoding "UTF-8")
-                         true))
-        account (:account data)]
-    (when (= account (:account (config)))
-      (let [tx (make-tx account (:statementItem data))]
-        (q! {:insert-into :tx
-             :values      [tx]})
-        (q! {:update :info
-             :set    {:balance    (:balance tx)
-                      :balance_at (:created_at tx)}
-             :where  [:and
-                      [:= :account account]
-                      [:or
-                       [:< :balance_at (:created_at tx)]
-                       [:= :balance_at nil]]]}))
-      (when-let [path (get *opts "--json")]
-        (write-json path)))
+  (if (:body req)
+    (let [data    (:data (json/parse-stream
+                          (io/reader (:body req) :encoding "UTF-8")
+                          true))
+          account (:account data)]
+      (when (= account (:account (config)))
+        (let [tx (make-tx account (:statementItem data))]
+          (q! {:insert-into :tx
+              :values      [tx]})
+          (q! {:update :info
+              :set    {:balance    (:balance tx)
+                        :balance_at (:created_at tx)}
+              :where  [:and
+                        [:= :account account]
+                        [:or
+                        [:< :balance_at (:created_at tx)]
+                        [:= :balance_at nil]]]}))
+        (when-let [path (get *opts "--json")]
+          (write-json path)))
+      {:status 200
+      :body   "ok"})
     {:status 200
      :body   "ok"}))
 

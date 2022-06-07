@@ -349,7 +349,7 @@ strong {color: white}
               logo ;; Державний герб України
 
               [:span.ml-1.shadow
-               "Скануй та " [:br] "допоможи ЗСУ"]]
+               "Скануй та " [:br] (:donate-label (config) "допоможи ЗСУ")]]
 
              (progress-bar)
 

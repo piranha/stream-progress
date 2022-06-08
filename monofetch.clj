@@ -113,7 +113,8 @@
 
 (defn update-info! []
   (let [account    (:account (config))
-        accs       (->> (:accounts (req! :get "/personal/client-info"))
+        resp       (req! :get "/personal/client-info")
+        accs       (->> (concat (:accounts resp) (:jars resp))
                         (filter #(= (:id %) account)))
         last-tx    (o! {:from   [:tx]
                         :select [[(sql/call :max :updated_at) :updated_at]]})
@@ -168,7 +169,8 @@
 
 (defn get-stats []
   (let [info     (o! {:from   [:info]
-                      :select [:balance]
+                      :select [:balance
+                               :send_id]
                       :where  [:= :account (:account (config))]})
         target   (:target-balance (config))
         maxvalue (o! {:from     [:tx]
@@ -186,6 +188,7 @@
                                [:= :account (:account (config))]
                                [:> :amount 0]]})]
     {:balance (:balance info)
+     :sendid  (:send_id info)
      :target  target
      :avg     (Math/round (:amount avgvalue))
      :max     (:amount maxvalue)
@@ -215,14 +218,14 @@
        :clip-rule "evenodd",
        :fill-rule "evenodd"}]]))
 
-(def qr
+(defn qr [sendid]
   (hi/html
     [:img {:style {:width "100%"}
            :src   (str "https://chart.googleapis.com/chart?"
                     (codec/form-encode
                       {:cht  "qr"
                        :chs  "200x200"
-                       :chl  "https://fwdays.com/event/stream-zaharchenko#donate"
+                       :chl  (:donate-url (config) (format "https://send.monobank.ua/%s" sendid))
                        :chld "M|2"}))}]))
 
 
@@ -338,7 +341,7 @@ strong {color: white}
                               :width         "6.86em"
                               :border-radius "0.57em"
                               :background    "white"}}
-             qr]
+             (qr (:sendid stats))]
 
 
             [:div.flex.justify-between.grow
@@ -346,7 +349,7 @@ strong {color: white}
               logo ;; Державний герб України
 
               [:span.ml-1.shadow
-               "Скануй та " [:br] "допоможи ЗСУ"]]
+               "Скануй та " [:br] (:donate-label (config) "допоможи ЗСУ")]]
 
              (progress-bar)
 
@@ -361,24 +364,27 @@ strong {color: white}
 
 
 (defn webhook [req]
-  (let [data    (:data (json/parse-stream
-                         (io/reader (:body req) :encoding "UTF-8")
-                         true))
-        account (:account data)]
-    (when (= account (:account (config)))
-      (let [tx (make-tx account (:statementItem data))]
-        (q! {:insert-into :tx
-             :values      [tx]})
-        (q! {:update :info
-             :set    {:balance    (:balance tx)
-                      :balance_at (:created_at tx)}
-             :where  [:and
-                      [:= :account account]
-                      [:or
-                       [:< :balance_at (:created_at tx)]
-                       [:= :balance_at nil]]]}))
-      (when-let [path (get *opts "--json")]
-        (write-json path)))
+  (if (:body req)
+    (let [data    (:data (json/parse-stream
+                          (io/reader (:body req) :encoding "UTF-8")
+                          true))
+          account (:account data)]
+      (when (= account (:account (config)))
+        (let [tx (make-tx account (:statementItem data))]
+          (q! {:insert-into :tx
+              :values      [tx]})
+          (q! {:update :info
+              :set    {:balance    (:balance tx)
+                        :balance_at (:created_at tx)}
+              :where  [:and
+                        [:= :account account]
+                        [:or
+                        [:< :balance_at (:created_at tx)]
+                        [:= :balance_at nil]]]}))
+        (when-let [path (get *opts "--json")]
+          (write-json path)))
+      {:status 200
+      :body   "ok"})
     {:status 200
      :body   "ok"}))
 

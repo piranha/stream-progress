@@ -76,8 +76,8 @@
       (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
 
-(defn balance [in-balance]
-  (- (quot in-balance 100)
+(defn balance [kopeks]
+  (- (quot kopeks 100)
      (:start-balance (config))))
 
 
@@ -169,9 +169,11 @@
 
 
 (defn get-stats []
-  (let [info     (o! {:from   [:info]
-                      :select [:balance
-                               :send_id]
+  (let [balance  (o! {:from   [:info]
+                      :select [[(sql/call :sum :balance) :balance]]
+                      :where  [:in :account ["other" (:account (config))]]})
+        sendid   (o! {:from   [:info]
+                      :select [:send_id]
                       :where  [:= :account (:account (config))]})
         target   (:target-balance (config))
         maxvalue (o! {:from     [:tx]
@@ -179,17 +181,17 @@
                                  :amount
                                  :desc
                                  :comment]
-                      :where    [:= :account (:account (config))]
+                      :where    [:in :account ["other" (:account (config))]]
                       :order-by [[:amount :desc]
                                  :created_at]
                       :limit    1})
         avgvalue (o! {:from   [:tx]
                       :select [[(sql/call :avg :amount) :amount]]
                       :where  [:and
-                               [:= :account (:account (config))]
+                               [:in :account ["other" (:account (config))]]
                                [:> :amount 0]]})]
-    {:balance (:balance info)
-     :sendid  (:send_id info)
+    {:balance (:balance balance)
+     :sendid  (:send_id sendid)
      :target  target
      :avg     (Math/round (:amount avgvalue))
      :max     (:amount maxvalue)
@@ -250,13 +252,13 @@
 
         [:style "
 html {font-family: Helvetica, Arial, sans-serif;
-      font-size: 28px;
+      font-size: 24px;
       line-height: 1.36em}
 
 strong {color: white}
 
 #show {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
-                                         rgba(38, 40, 44, 0) 100%);
+                                           rgba(38, 40, 44, 0) 100%);
        color: rgba(255, 255, 255, 0.8);
        position: fixed; bottom:0; left:0; right:0;
        padding: 0.86em;
@@ -270,7 +272,7 @@ strong {color: white}
 .nowrap {white-space: nowrap;}
 .overflow-hidden {overflow: hidden;}
 
-.ts-enter {
+.ts-enter.pill {
   animation: animate-pop 0.3s;
   animation-timing-function: cubic-bezier(.26, .53, .74, 1.48);
 }
@@ -285,14 +287,14 @@ strong {color: white}
 
 (defn donation-pill [{:keys [id amount]}]
   (hi/html
-    [:div {:id    id
-           :style {:height        "1.36em"
-                   :display       "inline-block"
-                   :padding       "0 0.57em"
-                   :margin-left   "0.57em"
-                   :background    "rgba(68, 190, 89, 0.5)"
-                   :border        "1px solid #44BE59"
-                   :border-radius "0.68em"}}
+    [:div.pill {:id    id
+                :style {:height        "1.36em"
+                        :display       "inline-block"
+                        :padding       "0 0.57em"
+                        :margin-left   "0.57em"
+                        :background    "rgba(68, 190, 89, 0.5)"
+                        :border        "1px solid #44BE59"
+                        :border-radius "0.68em"}}
      [:strong (hutil/raw-string (format "+&nbsp;%d&nbsp;₴" amount))]]))
 
 
@@ -388,15 +390,15 @@ strong {color: white}
 (defn input [{:keys [request-method form-params]}]
   (if (= request-method :post)
     (try
-      (prn (o! {:insert-into :tx
-                :values
-                [{:account    "other"
-                  :id         (str (random-uuid))
-                  :amount     (Long. (get form-params "amount"))
-                  :desc       (get form-params "desc")
-                  :comment    (get form-params "orig")
-                  :created_at (now)
-                  :updated_at (now)}]}))
+      (o! {:insert-into :tx
+           :values
+           [{:account    "other"
+             :id         (str (random-uuid))
+             :amount     (Long. (get form-params "amount"))
+             :desc       (get form-params "desc")
+             :comment    (get form-params "orig")
+             :created_at (now)
+             :updated_at (now)}]})
       (o! {:insert-into :info
            :values      [{:account    "other"
                           :balance_at (now)
@@ -406,6 +408,8 @@ strong {color: white}
                                        :where  [:= :account "other"]}}]
            :upsert      {:on-conflict   [:account]
                          :do-update-set [:balance_at :updated_at :balance]}})
+      (when-let [path (get *opts "--json")]
+        (write-json path))
       {:status  301
        :headers {"Location" "input"}}
       (catch Exception e
@@ -428,29 +432,30 @@ strong {color: white}
 
 
 (defn webhook [req]
-  (if (:body req)
+  (case (:request-method req)
+    :get {:status 200
+          :body "ok"}
+    :post
     (let [data    (:data (json/parse-stream
-                          (io/reader (:body req) :encoding "UTF-8")
-                          true))
+                           (io/reader (:body req) :encoding "UTF-8")
+                           true))
           account (:account data)]
       (when (= account (:account (config)))
         (let [tx (make-tx account (:statementItem data))]
           (q! {:insert-into :tx
-              :values      [tx]})
+               :values      [tx]})
           (q! {:update :info
-              :set    {:balance    (:balance tx)
+               :set    {:balance    (:balance tx)
                         :balance_at (:created_at tx)}
-              :where  [:and
+               :where  [:and
                         [:= :account account]
                         [:or
-                        [:< :balance_at (:created_at tx)]
-                        [:= :balance_at nil]]]}))
+                         [:< :balance_at (:created_at tx)]
+                         [:= :balance_at nil]]]}))
         (when-let [path (get *opts "--json")]
           (write-json path)))
       {:status 200
-      :body   "ok"})
-    {:status 200
-     :body   "ok"}))
+       :body "ok"})))
 
 
 (defn -app [req]

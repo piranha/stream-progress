@@ -334,6 +334,15 @@
         [:meta {:name "viewport" :content "width=device-width,initial-scale=1.0"}]
         ;;[:script {:src "http://localhost:3000/twinspark.js"}]
         [:script {:src "https://kasta-ua.github.io/twinspark-js/twinspark.js"}]
+        [:script (hiccup.util/raw-string "
+twinspark.func({retry: function(o) {
+  //console.log(o);
+  setTimeout(function() {
+    twinspark.action(o.el, o.input, o.el.getAttribute('ts-action'), null);
+    twinspark.executeReqs([twinspark.makeReq(o.el)]);
+  }, 1000);
+}});
+")]
 
         [:style "
 html {font-family: Helvetica, Arial, sans-serif;
@@ -431,6 +440,7 @@ strong {color: white}
      (base
        (hi/html
          [:div#show.flex {:ts-req          "progress"
+                          :ts-action       "wait ts-req-error, retry"
                           :ts-trigger      "load delay 1000"
                           ;;:ts-trigger      "click"
                           :ts-req-selector "#show"
@@ -447,7 +457,7 @@ strong {color: white}
             logo ;; Державний герб України
             [:span.ml-1.shadow
              "Скануй та " [:br] (or (-> (config) :ui :donate-label)
-                                     "допоможи ЗСУ")]]
+                                    "допоможи ЗСУ")]]
 
            (progress-bar)
 

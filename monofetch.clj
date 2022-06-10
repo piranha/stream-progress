@@ -193,6 +193,17 @@
                (- (now) DAY))))
 
 
+(defn set-mono-webhook! []
+  (let [url (str (:absolute (config)) "webhook")
+        res (mono! :post "/personal/webhook"
+              {:webhookUrl url})]
+    (println
+      (format (if (= "ok" (:status res))
+                "Webhook was set to url %s"
+                "Webhook was not set to url %s")
+        url))))
+
+
 (defn pzh-tx [account item]
   {:id         (sha1 (pr-str item))
    :account    account
@@ -298,7 +309,6 @@
 
 
 ;;; HTTP progress server
-
 
 (def logo
   (hi/html
@@ -569,12 +579,11 @@ strong {color: white}
     {:status 404
      :body   "Not Found\n"}))
 
-
 (def app (-> -app
              ring-params/wrap-params))
 
 
-(defn start-scheduler []
+(defn start-scheduler! []
   (let [stop (atom false)
         id   (format "s%x" (mod (System/currentTimeMillis)
                              1000000))
@@ -637,11 +646,10 @@ strong {color: white}
       (alter-var-root #'*scheduler
         (fn [v]
           (when v (v))
-          (start-scheduler))))
+          (start-scheduler!))))
 
     (when --webhook
-      (mono! :post "/personal/webhook"
-        {:webhookUrl (:webhook (config))}))
+      (set-mono-webhook!))
     @(promise)
     (System/exit 0))
 

@@ -624,9 +624,10 @@ strong {color: white}
     (alter-var-root #'*server
       (fn [v]
         (when v (v))
-        (let [port (:port (config) 1301)]
-          (println (str "running on http://127.0.0.1:" port))
-          (httpd/run-server app {:port port}))))
+        (let [ip   (:ip (config) "127.0.0.1")
+              port (:port (config) 1301)]
+          (println (format "running on http://%s:%s" ip port))
+          (httpd/run-server app {:ip ip :port port}))))
 
     (when (-> (config) :pzh :tag)
       (alter-var-root #'*scheduler

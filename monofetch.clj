@@ -389,7 +389,7 @@ strong {color: white}
                         :background    "rgba(68, 190, 89, 0.5)"
                         :border        "1px solid #44BE59"
                         :border-radius "0.68em"}}
-     [:strong (hutil/raw-string (format "+&nbsp;%d&nbsp;₴" amount))]]))
+     [:strong (hutil/raw-string (format "+&nbsp;%d&nbsp;₴" (long amount)))]]))
 
 
 (defn progress-bar []

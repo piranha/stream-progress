@@ -172,7 +172,8 @@
                                    id since-time))]
       (q! {:insert-into :info
            :values      [{:account    (:id acc)
-                          :pan        (first (:maskedPan acc))
+                          :pan        (or (first (:maskedPan acc))
+                                          (:title acc))
                           :send_id    (:sendId acc)
                           :iban       (:iban acc)
                           :balance    (balance (:balance acc))
@@ -310,15 +311,17 @@
        :fill-rule "evenodd"}]]))
 
 (defn qr [sendid]
-  (hi/html
-    [:img {:style {:width "100%"}
-           :src   (str "https://chart.googleapis.com/chart?"
-                    (codec/form-encode
-                      {:cht  "qr"
-                       :chs  "200x200"
-                       :chl  (or (-> (config) :ui :donate-url)
-                                 (format "https://send.monobank.ua/%s" sendid))
-                       :chld "M|2"}))}]))
+  (let [url (or (-> (config) :ui :donate-url)
+                (format "https://send.monobank.ua/%s" sendid))]
+    (hi/html
+      [:a {:href url}
+       [:img {:style {:width "100%"}
+              :src   (str "https://chart.googleapis.com/chart?"
+                       (codec/form-encode
+                         {:cht  "qr"
+                          :chs  "200x200"
+                          :chl  url
+                          :chld "M|2"}))}]])))
 
 
 (defn base [content]
@@ -619,6 +622,7 @@ strong {color: white}
 
   (create-schema)
   (update-mono!)
+  (update-pzh!)
 
   (when --server
     (alter-var-root #'*server

@@ -10,5 +10,5 @@
  :ip             "127.0.0.1"
  :port           1301
 
- :ui {:donate-url   "https://fwdays.com/event/stream-zaharchenko#donate"
+ :ui {:donate-url   nil
       :donate-label "допоможи ЗСУ"}}

@@ -276,7 +276,7 @@
     {:balance (:balance balance)
      :sendid  (:send_id sendid)
      :target  target
-     :avg     (Math/round (:amount avgvalue))
+     :avg     (Math/round (:amount avgvalue 0.0))
      :max     (:amount maxvalue)
      :maxname (some-> (:desc maxvalue) (str/replace #"^Від: " ""))}))
 

@@ -1,8 +1,12 @@
-{:token           ""
- :account         ""
- :start-balance   0
- :target-balance  100
- :since           "2022-06-14T10:35:24.00Z"
- :webhook         "https://1111-111-11-111-11.ngrok.io/webhook"
- :donate-url      "https://fwdays.com/event/stream-zaharchenko#donate"
- :donate-label    "допоможи ЗСУ"}
+{:mono           {:token   "from api.monobank.ua"
+                  :account "Run this: bb monofetch.clj --accounts true"
+                  :since   "2022-06-01T00:00:00Z"}
+ :manual         {:name "manual"}
+ :pzh            {:tag  nil #_ "test"
+                  :date nil #_ "2022-06-01~"}
+ :db             "store.db"
+ :target-balance 100000
+ :absolute       "https://yourdomain.ngrok.io/" ;; prefix
+
+ :ui {:donate-url   "https://fwdays.com/event/stream-zaharchenko#donate"
+      :donate-label "допоможи ЗСУ"}}

@@ -30,7 +30,7 @@
   '[ring.util.codec :as codec]
   '[ring.middleware.params :as ring-params])
 
-(alter-var-root #'log/*config* #(assoc % :min-level :info))
+(alter-var-root #'log/*config* #(assoc % :min-level :debug))
 
 
 ;;; Core
@@ -63,31 +63,25 @@
 (defn o! [query] (first (q! query)))
 
 
-(defn req! [method url & [data]]
-  (let [res  @(http/request
-                {:method  method
-                 :url     (str "https://api.monobank.ua" url)
-                 :headers {"X-Token" (:token (config))}
-                 :timeout 60000
-                 :body    (some-> data json/generate-string)})
-        data (-> res :body (json/parse-string true))]
-    (if (= (:status res) 200)
-      data
-      (throw (ex-info (:errorDescription data "Unknown error!") res)))))
-
-
 (defn balance [kopeks]
   (- (quot kopeks 100)
-     (:start-balance (config))))
+     (:start-balance (config) 0)))
 
 
 (defn human-n [n]
-  (.replace (format "%,d" n) "," " "))
+  (.replace (format "%,d" (long n)) "," " "))
 
 
 (defn z-zi-choose [n]
   (let [s (str n)]
     (if (= (first s) \1) "зі" "з")))
+
+
+(defn sha1
+  [s]
+  (let [hashed (-> (java.security.MessageDigest/getInstance "SHA-1")
+                   (.digest (.getBytes s)))]
+    (str/join (map #(format "%02x" %) hashed))))
 
 
 ;;; Time
@@ -99,10 +93,60 @@
   (quot (System/currentTimeMillis) 1000))
 
 
+(defn ->seconds
+  "From 2022-06-06T16:54:30Z to unix timestamp"
+  [s]
+  (some-> s Instant/parse .getEpochSecond))
+
+
 ;;; Logic
 
+(defn mono! [method url & [data]]
+  (let [full  (str "https://api.monobank.ua" url)
+        res  @(http/request
+                {:method  method
+                 :url     full
+                 :headers {"X-Token" (-> (config) :mono :token)}
+                 :timeout 60000
+                 :body    (some-> data json/generate-string)})
+        data (-> res :body (json/parse-string true))]
+    (if (= (:status res) 200)
+      data
+      (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
-(defn make-tx [account item]
+
+(defn pzh! [url params]
+  (let [params (for [[k v] params]
+                 {:id k :value [v]})
+        full   (str
+                 "https://report.comebackalive.in.ua/api/public/dashboard/e4f44bc7-05f4-459b-a10b-cc10e6637217/dashcard"
+                 url
+                 "?"
+                 (codec/form-encode {:parameters (json/generate-string params)}))
+        res    @(http/request
+                  {:method  :get
+                   :url     full
+                   :timeout 60000})
+        parsed (-> res :body (json/parse-string true))
+        cols   (->> parsed :data :cols (mapv (comp keyword :name)))
+        data   (mapv #(zipmap cols %) (-> parsed :data :rows))]
+    (if (< (:status res) 300)
+      data
+      (throw (ex-info (:errorDescription data "Unknown error!") res)))))
+
+
+
+(def CURRENCY
+  {980 "UAH"
+   978 "EUR"
+   840 "USD?"})
+
+
+(defn manual []
+  (or (-> (config) :manual :name) "manual"))
+
+
+(defn mono-tx [account item]
   {:id         (:id item)
    :account    account
    :amount     (quot (:amount item) 100)
@@ -112,40 +156,76 @@
    :created_at (:time item)
    :updated_at (now)})
 
-(defn update-info! []
-  (let [account    (:account (config))
-        resp       (req! :get "/personal/client-info")
-        accs       (->> (concat (:accounts resp) (:jars resp))
-                        (filter #(= (:id %) account)))
-        last-tx    (o! {:from   [:tx]
-                        :select [[(sql/call :max :updated_at) :updated_at]]})
-        since-time (or (:updated_at last-tx)
-                       (some-> (:since (config))
-                         Instant/parse
-                         .getEpochSecond)
-                       (- (now) (* 30 DAY)))
-        items      (req! :get (format "/personal/statement/%s/%s"
-                                account since-time))]
-    (q! {:insert-into :info
-         :values      (for [acc accs]
-                        {:account    (:id acc)
-                         :pan        (first (:maskedPan acc))
-                         :send_id    (:sendId acc)
-                         :iban       (:iban acc)
-                         :balance    (balance (:balance acc))
-                         :balance_at (now)
-                         :updated_at (now)})
-         :upsert      {:on-conflict   [:account]
-                       :do-update-set [:pan :send_id :iban :balance
-                                       :balance_at :updated_at]}})
-    (when (seq items)
-      (q! {:insert-into :tx
-           :values      (mapv (partial make-tx account) items)}))))
+
+(defn update-mono! []
+  (when-let [id (-> (config) :mono :account)]
+    (let [res        (mono! :get "/personal/client-info")
+          acc        (->> (concat (:accounts res) (:jars res))
+                         (filter #(= (:id %) id))
+                         first)
+          last-tx    (o! {:from   [:tx]
+                          :select [[(sql/call :max :updated_at) :updated_at]]})
+          since-time (or (:updated_at last-tx)
+                         (->seconds (-> (config) :mono :since))
+                         (- (now) (* 30 DAY)))
+          items      (mono! :get (format "/personal/statement/%s/%s"
+                                   id since-time))]
+      (q! {:insert-into :info
+           :values      [{:account    (:id acc)
+                          :pan        (first (:maskedPan acc))
+                          :send_id    (:sendId acc)
+                          :iban       (:iban acc)
+                          :balance    (balance (:balance acc))
+                          :balance_at (now)
+                          :updated_at (now)}]
+           :upsert      {:on-conflict   [:account]
+                         :do-update-set [:pan :send_id :iban :balance
+                                         :balance_at :updated_at]}})
+      (when (seq items)
+        (q! {:insert-into :tx
+             :values      (mapv (partial mono-tx id) items)})))))
+
 
 (comment
-  (req! :get (format "/personal/statement/%s/%s"
-               (:account (config))
+  (mono! :get (format "/personal/statement/%s/%s"
+               (-> (config) :mono :account)
                (- (now) DAY))))
+
+
+(defn pzh-tx [account item]
+  {:id         (sha1 (pr-str item))
+   :account    account
+   :amount     (:amount item)
+   :desc       (:comment item)
+   :created_at (->seconds (:date item))
+   :updated_at (now)})
+
+
+(def TAG "9372d2ab")
+(def DATE "b6f7e9ea")
+
+
+(defn update-pzh! []
+  (when-let [tag (-> (config) :pzh :tag)]
+    (let [params  {TAG  tag
+                   DATE (-> (config) :pzh :date)}
+          balance (pzh! "/2/card/2" params)
+          items   (pzh! "/5/card/5" params)
+          id      (str "pzh-" tag)]
+      (q! {:insert-into :info
+           :values      [{:account    id
+                          :pan        tag
+                          :balance    (:sum (first balance))
+                          :balance_at (now)
+                          :updated_at (now)}]
+           :upsert      {:on-conflict   [:account]
+                         :do-update-set [:balance :balance_at :updated_at]}})
+      (when (seq items)
+        (q! {:insert-into :tx
+             :values      (mapv (partial pzh-tx id) items)})))))
+
+(comment
+  (update-pzh!))
 
 
 (defn create-schema []
@@ -169,26 +249,29 @@
 
 
 (defn get-stats []
-  (let [balance  (o! {:from   [:info]
+  (let [accs     [(manual)
+                  (str "pzh-" (-> (config) :pzh :tag))
+                  (-> (config) :mono :account)]
+        balance  (o! {:from   [:info]
                       :select [[(sql/call :sum :balance) :balance]]
-                      :where  [:in :account ["other" (:account (config))]]})
+                      :where  [:in :account accs]})
         sendid   (o! {:from   [:info]
                       :select [:send_id]
-                      :where  [:= :account (:account (config))]})
+                      :where  [:= :account (-> (config) :mono :account)]})
         target   (:target-balance (config))
         maxvalue (o! {:from     [:tx]
                       :select   [:created_at
                                  :amount
                                  :desc
                                  :comment]
-                      :where    [:in :account ["other" (:account (config))]]
+                      :where    [:in :account accs]
                       :order-by [[:amount :desc]
                                  :created_at]
                       :limit    1})
         avgvalue (o! {:from   [:tx]
                       :select [[(sql/call :avg :amount) :amount]]
                       :where  [:and
-                               [:in :account ["other" (:account (config))]]
+                               [:in :account accs]
                                [:> :amount 0]]})]
     {:balance (:balance balance)
      :sendid  (:send_id sendid)
@@ -212,6 +295,7 @@
                            :maxname (:maxname stats)}}))))
 
 
+
 ;;; HTTP progress server
 
 
@@ -232,7 +316,8 @@
                     (codec/form-encode
                       {:cht  "qr"
                        :chs  "200x200"
-                       :chl  (:donate-url (config) (format "https://send.monobank.ua/%s" sendid))
+                       :chl  (or (-> (config) :ui :donate-url)
+                                 (format "https://send.monobank.ua/%s" sendid))
                        :chld "M|2"}))}]))
 
 
@@ -361,7 +446,8 @@ strong {color: white}
            [:div.title.flex.ml-1
             logo ;; Державний герб України
             [:span.ml-1.shadow
-             "Скануй та " [:br] (:donate-label (config) "допоможи ЗСУ")]]
+             "Скануй та " [:br] (or (-> (config) :ui :donate-label)
+                                     "допоможи ЗСУ")]]
 
            (progress-bar)
 
@@ -392,7 +478,7 @@ strong {color: white}
     (try
       (o! {:insert-into :tx
            :values
-           [{:account    "other"
+           [{:account    (manual)
              :id         (str (random-uuid))
              :amount     (Long. (get form-params "amount"))
              :desc       (get form-params "desc")
@@ -400,12 +486,12 @@ strong {color: white}
              :created_at (now)
              :updated_at (now)}]})
       (o! {:insert-into :info
-           :values      [{:account    "other"
+           :values      [{:account    (manual)
                           :balance_at (now)
                           :updated_at (now)
                           :balance    {:from   [:tx]
                                        :select [(sql/call :sum :amount)]
-                                       :where  [:= :account "other"]}}]
+                                       :where  [:= :account (manual)]}}]
            :upsert      {:on-conflict   [:account]
                          :do-update-set [:balance_at :updated_at :balance]}})
       (when-let [path (get *opts "--json")]
@@ -421,7 +507,7 @@ strong {color: white}
                                          (st/print-stack-trace e))]]))}))
     (let [txs (q! {:from   [:tx]
                    :select [:amount :desc :comment]
-                   :where  [:= :account "other"]})]
+                   :where  [:= :account (manual)]})]
       {:status  200
        :headers {"Content-Type" "text/html"}
        :body    (input-t
@@ -440,8 +526,8 @@ strong {color: white}
                            (io/reader (:body req) :encoding "UTF-8")
                            true))
           account (:account data)]
-      (when (= account (:account (config)))
-        (let [tx (make-tx account (:statementItem data))]
+      (when (= account (-> (config) :mono :account))
+        (let [tx (mono-tx account (:statementItem data))]
           (q! {:insert-into :tx
                :values      [tx]})
           (q! {:update :info
@@ -475,19 +561,54 @@ strong {color: white}
              ring-params/wrap-params))
 
 
+(defn start-scheduler []
+  (let [stop (atom false)
+        id   (format "s%x" (mod (System/currentTimeMillis)
+                             1000000))
+        t    (Thread.
+               (fn []
+                 (if @stop
+                   (log/infof "scheduler %s: stop signal" id)
+
+                   (do
+                     (log/debugf "scheduler %s" id)
+                     (try
+                       (update-pzh!)
+                       (catch Exception e
+                         (log/error e "scheduler error")))
+                     (try
+                       (Thread/sleep (* 60 1000))
+                       (catch InterruptedException _
+                         (log/infof "scheduler %s: sleep interrupt" id)))
+                     (recur)))))]
+    (log/infof "scheduler %s: start" id)
+    (.start t)
+    (fn []
+      (reset! stop true)
+      (.interrupt t))))
+
+
 (defonce *server nil)
+(defonce *scheduler nil)
 
 
-(defn -main [{:strs [--json --server --webhook]}]
+(defn -main [{:strs [--accounts --json --server --webhook]}]
+  (when --accounts
+    (let [res (mono! :get "/personal/client-info")]
+      (doseq [acc (:accounts res)]
+        (println (format "Account for card %s (%s %s), id %s"
+                   (first (:maskedPan acc))
+                   (:type acc)
+                   (CURRENCY (:currencyCode acc))
+                   (:id acc))))
+      (doseq [acc (:jars res)]
+        (println (format "Account for jar \"%s\", id %s"
+                   (:title acc)
+                   (:id acc)))))
+    (System/exit 0))
+
   (create-schema)
-  (update-info!)
-
-  (when --webhook
-    (req! :post "/personal/webhook"
-      {:webhookUrl (:webhook (config))}))
-
-  (when --json
-    (write-json --json))
+  (update-mono!)
 
   (when --server
     (alter-var-root #'*server
@@ -496,7 +617,21 @@ strong {color: white}
         (let [port (:port (config) 1301)]
           (println (str "running on http://127.0.0.1:" port))
           (httpd/run-server app {:port port}))))
-    @(promise)))
+
+    (when (-> (config) :pzh :tag)
+      (alter-var-root #'*scheduler
+        (fn [v]
+          (when v (v))
+          (start-scheduler))))
+
+    (when --webhook
+      (mono! :post "/personal/webhook"
+        {:webhookUrl (:webhook (config))}))
+    @(promise)
+    (System/exit 0))
+
+  (when --json
+    (write-json --json)))
 
 
 (when (= *file* (System/getProperty "babashka.file"))

@@ -154,6 +154,17 @@
   (or (-> (config) :manual :name) "manual"))
 
 
+(defn parse-orig-amount [s]
+  (when-let [[_ amt cur] (re-find #"\((\d+) ?([\w\p{Sc}]+)\)$" s)]
+    (let [sign (get {"USD" "$" "EUR" "€" "UAH" "₴"} cur)]
+      (if sign
+        (str amt sign)
+        (str amt " " cur)))))
+
+(comment
+  (parse-orig-amount "xxx (1 USD)"))
+
+
 (defn mono-tx [account item]
   {:id         (:id item)
    :account    account
@@ -213,12 +224,13 @@
 
 
 (defn pzh-tx [account item]
-  {:id         (sha1 (pr-str item))
-   :account    account
-   :amount     (:amount item)
-   :desc       (:comment item)
-   :created_at (->seconds (:date item))
-   :updated_at (now)})
+  {:id          (sha1 (pr-str item))
+   :account     account
+   :amount      (:amount item)
+   :orig_amount (parse-orig-amount (:comment item))
+   :desc        (:comment item)
+   :created_at  (->seconds (:date item))
+   :updated_at  (now)})
 
 
 (def TAG "9372d2ab")
@@ -261,6 +273,7 @@
          (id TEXT PRIMARY KEY,
           account TEXT,
           amount INT,
+          orig_amount TEXT,
           balance INT,
           desc TEXT,
           comment TEXT,
@@ -416,7 +429,7 @@ strong {color: white}
        [:body {} content]])))
 
 
-(defn donation-pill [{:keys [id amount]}]
+(defn donation-pill [{:keys [id amount orig_amount]}]
   (hi/html
     [:div.pill {:id    id
                 :style {:height        "1.36em"
@@ -426,13 +439,15 @@ strong {color: white}
                         :background    "rgba(68, 190, 89, 0.5)"
                         :border        "1px solid #44BE59"
                         :border-radius "0.68em"}}
-     [:strong (hutil/raw-string (format "+&nbsp;%d&nbsp;₴" (long amount)))]]))
+     [:strong (hutil/raw-string (if orig_amount
+                                  (format "+&nbsp;%s" orig_amount)
+                                  (format "+&nbsp;%d₴" (long amount))))]]))
 
 
 (defn progress-bar []
   (let [stats     (get-stats)
         donations (q! {:from     [:tx]
-                       :select   [:id :amount]
+                       :select   [:id :amount :orig_amount]
                        :order-by [[:created_at :desc]]
                        :offset   0
                        :limit    5})

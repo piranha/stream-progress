@@ -1,5 +1,5 @@
 deploy:
-	scp monofetch.clj saiph:var/monofetch/
+	scp donate.clj saiph:bin/
 
 n:
 	bb nrepl-server

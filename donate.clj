@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 
-(ns monofetch
+(ns donate
   (:import [java.time Instant]
            [java.nio.file Path])
   (:require [clojure.edn :as edn]
@@ -30,7 +30,7 @@
   '[ring.util.codec :as codec]
   '[ring.middleware.params :as ring-params])
 
-(alter-var-root #'log/*config* #(assoc % :min-level :debug))
+(alter-var-root #'log/*config* #(assoc % :min-level :info))
 
 
 ;;; Core
@@ -293,10 +293,10 @@
                       :where  [:and
                                [:in :account accs]
                                [:> :amount 0]]})]
-    {:balance (:balance balance)
+    {:balance (or (:balance balance) 0)
      :sendid  (:send_id sendid)
      :target  target
-     :avg     (Math/round (:amount avgvalue 0.0))
+     :avg     (Math/round (or (:amount avgvalue) 0.0))
      :max     (:amount maxvalue)
      :maxname (some-> (:desc maxvalue) (str/replace #"^Від: " ""))}))
 
@@ -315,6 +315,21 @@
                            :maxname (:maxname stats)}}))))
 
 
+;;; i18n
+
+(def TRANS
+  {"Скануй та "    "Scan and "
+   "допоможи ЗСУ"  "help Ukraine"
+   "В середньому " "Average "
+   "Максимум від " "Maximum "
+   "Зібрано "      "Total "})
+
+(defn t [s]
+  (let [lang (-> (config) :lang)]
+    (if (= lang :en)
+      (get TRANS s)
+      s)))
+
 
 ;;; HTTP progress server
 
@@ -332,7 +347,8 @@
   (let [url (or (-> (config) :ui :donate-url)
                 (format "https://send.monobank.ua/%s" sendid))]
     (hi/html
-      [:a {:href url}
+      [:a {:href   url
+           :target "_blank"}
        [:img {:style {:width "100%"}
               :src   (str "https://chart.googleapis.com/chart?"
                        (codec/form-encode
@@ -428,7 +444,7 @@ strong {color: white}
 
         ;; "Зібрано 69 420 ₴ / 100 000 ₴"
         [:div.shadow.nowrap
-         "Зібрано "
+         (t "Зібрано ")
          [:strong (human-n (:balance stats)) " ₴"]
          " / " (human-n (:target stats)) " ₴"]
 
@@ -477,19 +493,19 @@ strong {color: white}
            [:div.title.flex.ml-1
             logo ;; Державний герб України
             [:span.ml-1.shadow
-             "Скануй та " [:br] (or (-> (config) :ui :donate-label)
-                                    "допоможи ЗСУ")]]
+             (t "Скануй та ") [:br] (or (-> (config) :ui :donate-label)
+                                        (t "допоможи ЗСУ"))]]
 
            (progress-bar)
 
            ;; stats
            [:div.ml-1.shadow.nowrap
             {:style {:text-align "right"}}
-            [:div "В середньому " [:strong (format "%d ₴" (:avg stats))]]
-            [:div "Максимум від "
+            [:div (t "В середньому ") [:strong (format "%d ₴" (:avg stats))]]
+            [:div (t "Максимум від ")
              [:strong (:maxname stats)]
              " "
-             [:strong (format "%s ₴" (:max stats))]]]]]))}))
+             [:strong (:max stats) " ₴"]]]]]))}))
 
 
 (defn input-t [content]
@@ -669,3 +685,4 @@ strong {color: white}
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main *opts))
+

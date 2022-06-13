@@ -49,7 +49,15 @@
 
 (defn config []
   (let [path (get *opts "--cfg" ".config.edn")]
-    (edn/read-string (slurp (rel-to-me path)))))
+    (cond
+      (.exists (io/file path))
+      (edn/read-string (slurp path))
+
+      (.exists (io/file (rel-to-me path)))
+      (edn/read-string (slurp (rel-to-me path)))
+
+      :else
+      (throw (ex-info (str "Cannot find config " path) {:path path})))))
 
 
 (defn q! [query]

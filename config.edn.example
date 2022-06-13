@@ -1,4 +1,4 @@
-{:mono           {:token   "from api.monobank.ua"
+{:mono           {:token   nil #_"from api.monobank.ua"
                   :account "Run this: bb monofetch.clj --accounts true"
                   :since   "2022-06-01T00:00:00Z"}
  :manual         {:name "manual"}

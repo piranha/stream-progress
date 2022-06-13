@@ -218,23 +218,23 @@
 
 
 (defn update-pzh! []
-  (when-let [tag (-> (config) :pzh :tag)]
-    (let [params  {TAG  tag
-                   DATE (-> (config) :pzh :date)}
-          balance (pzh! "/2/card/2" params)
-          items   (pzh! "/5/card/5" params)
-          id      (str "pzh-" tag)]
-      (q! {:insert-into :info
-           :values      [{:account    id
-                          :pan        tag
-                          :balance    (:sum (first balance))
-                          :balance_at (now)
-                          :updated_at (now)}]
-           :upsert      {:on-conflict   [:account]
-                         :do-update-set [:balance :balance_at :updated_at]}})
-      (when (seq items)
-        (q! {:insert-into :tx
-             :values      (mapv (partial pzh-tx id) items)})))))
+  (let [tag (-> (config) :pzh :tag)
+        params  {TAG  tag
+                 DATE (-> (config) :pzh :date)}
+        balance (pzh! "/2/card/2" params)
+        items   (pzh! "/5/card/5" params)
+        id      (str "pzh-" tag)]
+    (q! {:insert-into :info
+         :values      [{:account    id
+                        :pan        tag
+                        :balance    (:sum (first balance))
+                        :balance_at (now)
+                        :updated_at (now)}]
+         :upsert      {:on-conflict   [:account]
+                       :do-update-set [:balance :balance_at :updated_at]}})
+    (when (seq items)
+      (q! {:insert-into :tx
+           :values      (mapv (partial pzh-tx id) items)}))))
 
 (comment
   (update-pzh!))
@@ -630,8 +630,10 @@ strong {color: white}
     (System/exit 0))
 
   (create-schema)
-  (update-mono!)
-  (update-pzh!)
+  (when (-> (config) :mono :token)
+    (update-mono!))
+  (when (-> (config) :pzh :tag)
+    (update-pzh!))
 
   (when --server
     (alter-var-root #'*server

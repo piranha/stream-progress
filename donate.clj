@@ -37,8 +37,8 @@
 
 (def -me (Path/of (.toURI (io/file *file*))))
 
-(defn rel-to-me [path]
-  (str (.resolveSibling -me path)))
+(defn rel [who path]
+  (str (.resolveSibling who path)))
 
 
 (def *opts (when *command-line-args* (apply assoc {} *command-line-args*)))
@@ -46,25 +46,32 @@
 (comment
   (alter-var-root #'*opts (constantly {"--json" "donation.json"})))
 
-
-(defn config []
+(def config-path
   (let [path (get *opts "--cfg" ".config.edn")]
     (cond
       (.exists (io/file path))
-      (edn/read-string (slurp path))
+      path
 
-      (.exists (io/file (rel-to-me path)))
-      (edn/read-string (slurp (rel-to-me path)))
+      (.exists (io/file (rel -me path)))
+      (rel -me path)
 
       :else
       (throw (ex-info (str "Cannot find config " path) {:path path})))))
 
 
+(def config
+  (memoize
+    (fn []
+      (edn/read-string (slurp config-path)))))
+
+
+(def dbpath (rel (Path/of (.toURI (io/file config-path))) (:db (config))))
+
+
 (defn q! [query]
   (let [query (if (map? query)
                 (sql/format query)
-                query)
-        dbpath (rel-to-me (:db (config) "mono.db"))]
+                query)]
     (sqlite/query dbpath query)))
 
 

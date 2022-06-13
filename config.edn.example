@@ -1,8 +1,9 @@
+;; -*- mode: clojure -*-
 {:mono           {:token   nil #_"from api.monobank.ua"
                   :account "Run this: bb monofetch.clj --accounts true"
                   :since   "2022-06-01T00:00:00Z"}
  :manual         {:name "manual"}
- :pzh            {:tag  nil #_ "test"
+ :pzh            {:tag  nil #_ "your-tag-here"
                   :date nil #_ "2022-06-01~"}
  :db             "store.db"
  :target-balance 100000

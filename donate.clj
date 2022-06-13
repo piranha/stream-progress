@@ -338,11 +338,11 @@
 ;;; i18n
 
 (def TRANS
-  {"Скануй та "    "Scan and "
-   "допоможи ЗСУ"  "help Ukraine"
+  {"Скануй та "    "Scan the code "
+   "допоможи ЗСУ"  "and help Ukraine"
    "В середньому " "Average "
-   "Максимум від " "Maximum "
-   "Зібрано "      "Total "})
+   "Максимум від " "Largest "
+   "Зібрано "      "Raised "})
 
 (defn t [s]
   (let [lang (-> (config) :lang)]
@@ -424,7 +424,7 @@ strong {color: white}
 .overflow-hidden {overflow: hidden;}
 
 .ts-enter.pill {
-  animation: animate-pop 0.3s;
+  animation: animate-pop 0.5s;
   animation-timing-function: cubic-bezier(.26, .53, .74, 1.48);
 }
 

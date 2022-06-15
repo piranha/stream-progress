@@ -33,7 +33,17 @@
 (alter-var-root #'log/*config* #(assoc % :min-level :info))
 
 
-;;; Core
+;;; i18n
+
+(def TRANS
+  {"Скануй та "    "Scan the code "
+   "допоможи ЗСУ"  "and help Ukraine"
+   "В середньому " "Average "
+   "Максимум від " "Largest "
+   "Зібрано "      "Raised "})
+
+
+;;; Config
 
 (def -me (Path/of (.toURI (io/file *file*))))
 
@@ -66,6 +76,14 @@
 
 
 (def dbpath (rel (Path/of (.toURI (io/file config-path))) (:db (config))))
+(def lang (-> (config) :ui :lang))
+
+
+;;; Core
+
+(if (= lang :en)
+  (defn t [s] (get TRANS s))
+  (def t identity))
 
 
 (defn q! [query]
@@ -187,10 +205,11 @@
   (when-let [id (-> (config) :mono :account)]
     (let [res        (mono! :get "/personal/client-info")
           acc        (->> (concat (:accounts res) (:jars res))
-                         (filter #(= (:id %) id))
-                         first)
+                          (filter #(= (:id %) id))
+                          first)
           last-tx    (o! {:from   [:tx]
-                          :select [[(sql/call :max :updated_at) :updated_at]]})
+                          :select [[(sql/call :max :updated_at) :updated_at]]
+                          :where  [:= :account id]})
           since-time (or (:updated_at last-tx)
                          (->seconds (-> (config) :mono :since))
                          (- (now) (* 30 DAY)))
@@ -245,7 +264,7 @@
 
 
 (defn update-pzh! []
-  (let [tag (-> (config) :pzh :tag)
+  (let [tag     (-> (config) :pzh :tag)
         params  {TAG  tag
                  DATE (-> (config) :pzh :date)}
         balance (pzh! "/2/card/2" params)
@@ -260,8 +279,11 @@
          :upsert      {:on-conflict   [:account]
                        :do-update-set [:balance :balance_at :updated_at]}})
     (when (seq items)
-      (q! {:insert-into :tx
-           :values      (mapv (partial pzh-tx id) items)}))))
+      (let [txes (mapv (partial pzh-tx id) items)]
+        (q! {:insert-into :tx
+             :values      txes
+             :upsert      {:on-conflict   [:id]
+                           :do-update-set (keys (first txes))}})))))
 
 (comment
   (update-pzh!))
@@ -333,22 +355,6 @@
                            :avg     (human-n (:avg stats))
                            :max     (human-n (:max stats))
                            :maxname (:maxname stats)}}))))
-
-
-;;; i18n
-
-(def TRANS
-  {"Скануй та "    "Scan the code "
-   "допоможи ЗСУ"  "and help Ukraine"
-   "В середньому " "Average "
-   "Максимум від " "Largest "
-   "Зібрано "      "Raised "})
-
-(defn t [s]
-  (let [lang (-> (config) :lang)]
-    (if (= lang :en)
-      (get TRANS s)
-      s)))
 
 
 ;;; HTTP progress server

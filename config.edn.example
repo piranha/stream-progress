@@ -1,15 +1,21 @@
 ;; -*- mode: clojure -*-
-{:mono           {:token   nil #_"from api.monobank.ua"
-                  :account "Run this: bb monofetch.clj --accounts true"
-                  :since   "2022-06-01T00:00:00Z"}
- :manual         {:name "manual"}
- :pzh            {:tag  nil #_ "your-tag-here"
-                  :date nil #_ "2022-06-01~"}
- :db             "store.db"
- :target-balance 100000
- :absolute       "https://yourdomain.ngrok.io/" ;; prefix
- :ip             "127.0.0.1"
- :port           1301
+{:mono   {:token   nil #_ "from api.monobank.ua" ; `nil` - не чіпати моно
+          ;; це `id` аккаунта в монобанку
+          :account "Run this: bb monofetch.clj --accounts true"
+          ;; це потрібно якщо треба обмежити історію транзакцій, UTC
+          :since   nil #_ "2022-06-01T00:00:00Z"}
+ :manual {:name "manual"}
+ :pzh    {:tag  nil #_ "your-tag-here" ; `nil` - не чіпати ПЖ
+          ;; тут у форматі метабейзу, тільда в кінці значить "від цієї
+          ;; дати і далі"
+          :date nil #_ "2022-06-01~"}
 
- :ui {:donate-url   nil
+ :db             "store.db"
+ :target-balance 100000 ; у гривнях
+ :absolute       "https://yourdomain.ngrok.io/" ; префікс, без урла
+ :ip             "127.0.0.1" ; айпі, на якому запускається
+ :port           1301 ; порт, на якому запускається
+
+ :ui {:lang         :uk ; або :en
+      :donate-url   nil ; урл, куди вести QR-код, якщо лінк на монобанк не підходить
       :donate-label "допоможи ЗСУ"}}

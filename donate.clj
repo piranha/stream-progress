@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 
 (ns donate
-  (:import [java.time Instant]
+  (:import [java.time Instant OffsetDateTime]
            [java.nio.file Path])
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
@@ -129,7 +129,11 @@
 (defn ->seconds
   "From 2022-06-06T16:54:30Z to unix timestamp"
   [s]
-  (some-> s Instant/parse .getEpochSecond))
+  (when s
+    (let [i (if (str/ends-with? s "Z")
+              (Instant/parse s)
+              (.toInstant (OffsetDateTime/parse s)))]
+      (.getEpochSecond i))))
 
 
 ;;; Logic

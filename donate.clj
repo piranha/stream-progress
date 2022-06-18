@@ -409,25 +409,32 @@ twinspark.func({retry: function(o) {
 
         [:style "
 html {font-family: Helvetica, Arial, sans-serif;
-      font-size: 24px;
+      font-size: 14px;
       line-height: 1.36em}
 
 strong {color: white}
 
-#show {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
+.embed {border-radius: 1rem;
+        border: 2px solid #5050B9;
+        background: #A5A5DB;
+        padding: 0.86em;}
+.widget {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
                                            rgba(38, 40, 44, 0) 100%);
-       color: rgba(255, 255, 255, 0.8);
-       position: fixed; bottom:0; left:0; right:0;
-       padding: 0.86em;
-       min-height: 6.86em;}
+         color: rgba(255, 255, 255, 0.8);
+         position: fixed; bottom:0; left:0; right:0;
+         padding: 0.86em;
+         min-height: 6.86em;
+         font-size: 24px;}
 
-.shadow { text-shadow: 0 0 10px black; }
+.enable-shadow .shadow { text-shadow: 0 0 10px black; }
 .flex {display: flex; align-items: center;}
 .grow {flex-grow: 1;}
 .justify-between {justify-content: space-between; }
+.mt-1 {margin-top: 1rem;}
 .ml-1 {margin-left: 1rem;}
 .nowrap {white-space: nowrap;}
 .overflow-hidden {overflow: hidden;}
+.text-right {text-align: right;}
 
 .ts-enter.pill {
   animation: animate-pop 0.5s;
@@ -457,7 +464,7 @@ strong {color: white}
                                   (format "+&nbsp;%d₴" (long amount))))]]))
 
 
-(defn progress-bar []
+(defn progress-bar [embed?]
   (let [stats     (get-stats)
         donations (q! {:from     [:tx]
                        :select   [:id :amount :orig_amount]
@@ -466,7 +473,7 @@ strong {color: white}
                        :limit    5})
         progress  (* 100 (/ (float (:balance stats)) (:target stats)))]
     (hi/html
-      [:div.ml-1.grow {:style {:max-width "33.75em"}}
+      [:div.ml-1.grow {:style (when-not embed? {:max-width "33.75em"})}
 
        [:div.justify-between.flex {:style {:margin-bottom "0.36em"}}
 
@@ -498,37 +505,47 @@ strong {color: white}
 
 
 (defn progress [req]
-  (let [stats (get-stats)]
+  (let [embed? (contains? (:query-params req) "embed")
+        stats  (get-stats)]
     {:status  200
      :headers {"Content-Type" "text/html"}
      :body
      (base
        (hi/html
-         [:div#show.flex {:ts-req          "progress"
+         [:div#show.flex {:class           (if embed?
+                                             "embed"
+                                             "widget enable-shadow")
+                          :ts-req          (str "progress"
+                                             (when embed?
+                                               "?embed=1"))
                           :ts-action       "wait ts-req-error, retry"
                           :ts-trigger      "load delay 1000"
                           ;;:ts-trigger      "click"
                           :ts-req-selector "#show"
                           :style           {:align-items "flex-end"}}
-          [:div.qr {:style {:height        "6.86em"
-                            :width         "6.86em"
-                            :border-radius "0.57em"
-                            :background    "white"}}
-           (qr (:sendid stats))]
+
+          (when-not embed?
+            [:div.qr {:style {:height        "6.86em"
+                              :width         "6.86em"
+                              :border-radius "0.57em"
+                              :background    "white"}}
+             (qr (:sendid stats))])
 
 
-          [:div.flex.justify-between.grow
-           [:div.title.flex.ml-1
-            logo ;; Державний герб України
-            [:span.ml-1.shadow
-             (t "Скануй та ") [:br] (or (-> (config) :ui :donate-label)
-                                        (t "допоможи ЗСУ"))]]
+          [:div.justify-between.grow {:class (when-not embed? "flex")}
+           (when-not embed?
+             [:div.title.flex.ml-1
+              logo ;; Державний герб України
+              [:span.ml-1.shadow
+               (t "Скануй та ") [:br] (or (-> (config) :ui :donate-label)
+                                          (t "допоможи ЗСУ"))]])
 
-           (progress-bar)
+           (progress-bar embed?)
 
            ;; stats
-           [:div.ml-1.shadow.nowrap
-            {:style {:text-align "right"}}
+           [:div.ml-1.shadow.nowrap {:class (if embed?
+                                              "mt-1"
+                                              "text-right")}
             [:div (t "В середньому ") [:strong (format "%d ₴" (:avg stats))]]
             [:div (t "Максимум від ")
              [:strong (:maxname stats)]
@@ -592,6 +609,29 @@ strong {color: white}
                      [:tr [:td (:amount tx)] [:td (:desc tx)] [:td (:comment tx)]])])})))
 
 
+(defn embed-js
+  "Usage:
+
+  <script src='https://mono.d.solovyov.net/embed.js' data-style='width: 100%;'></script>
+  "
+  [_req]
+  (let [url (str (:absolute (config)) "progress?embed=1")]
+    {:status  200
+     :headers {"Content-Type" "application/javascript"}
+     :body    (format "
+(function(url) {
+  var script = document.currentScript;
+
+  var iframe = document.createElement('iframe');
+  iframe.src = url;
+  iframe.style = 'display: block; border: 0;' +
+    script.getAttribute('data-style');
+
+  script.insertAdjacentElement('afterend', iframe);
+})('%s');
+" url)}))
+
+
 (defn webhook [req]
   (case (:request-method req)
     :get {:status 200
@@ -628,6 +668,7 @@ strong {color: white}
     "/progress" (progress req)
     "/webhook"  (webhook req)
     "/input"    (input req)
+    "/embed.js" (embed-js req)
     {:status 404
      :body   "Not Found\n"}))
 

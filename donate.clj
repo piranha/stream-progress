@@ -523,7 +523,9 @@ strong {color: white}
                                              (when embed?
                                                "?embed=1"))
                           :ts-action       "wait ts-req-error, retry"
-                          :ts-trigger      "load delay 1000"
+                          :ts-trigger      (if embed?
+                                             "load delay 60000"
+                                             "load delay 1000")
                           ;;:ts-trigger      "click"
                           :ts-req-selector "#show"
                           :style           {:align-items "flex-end"}}

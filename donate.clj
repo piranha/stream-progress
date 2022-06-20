@@ -419,7 +419,6 @@ html {font-family: Helvetica, Arial, sans-serif;
 strong {color: white}
 
 .embed {border-radius: 1rem;
-        border: 2px solid #5050B9;
         background: #A5A5DB;
         padding: 0.86em;}
 .widget {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
@@ -428,7 +427,8 @@ strong {color: white}
          position: fixed; bottom:0; left:0; right:0;
          padding: 0.86em;
          min-height: 6.86em;
-         font-size: 24px;}
+         font-size: 24px;
+         line-height: 1.36em}
 
 .enable-shadow .shadow { text-shadow: 0 0 10px black; }
 .flex {display: flex; align-items: center;}

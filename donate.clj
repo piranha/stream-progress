@@ -420,7 +420,8 @@ strong {color: white}
 
 .embed {border-radius: 1rem;
         background: #87CEEB;
-        padding: 0.86em;}
+        padding: 0.86em;
+        padding-left: 0;}
 .widget {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
                                            rgba(38, 40, 44, 0) 100%);
          color: rgba(255, 255, 255, 0.8);
@@ -453,13 +454,17 @@ strong {color: white}
        [:body {} content]])))
 
 
+(def donation-pill-height "1.48em")
+
 (defn donation-pill [{:keys [id amount orig_amount]}]
   (hi/html
     [:div.pill {:id    id
-                :style {:height        "1.36em"
+                :style {:height        donation-pill-height
+                        :box-sizing    "border-box"
                         :display       "inline-block"
                         :padding       "0 0.57em"
                         :margin-left   "0.57em"
+                        :margin-bottom "1em"
                         :background    "rgba(68, 190, 89, 0.5)"
                         :border        "1px solid #44BE59"
                         :border-radius "0.68em"}}
@@ -487,7 +492,7 @@ strong {color: white}
          [:strong (human-n (:balance stats)) " ₴"]
          " / " (human-n (:target stats)) " ₴"]
 
-        [:div.nowrap.overflow-hidden
+        [:div.overflow-hidden.text-right {:style {:height donation-pill-height}}
          (for [d donations]
            (donation-pill d))]]
 
@@ -538,7 +543,9 @@ strong {color: white}
              (qr (:sendid stats))])
 
 
-          [:div.justify-between.grow {:class (when-not embed? "flex")}
+          [:div.justify-between.grow
+           {:class (when-not embed? "flex")
+            :style {:max-width "100%"}}
            (when-not embed?
              [:div.title.flex.ml-1
               logo ;; Державний герб України
@@ -760,4 +767,3 @@ strong {color: white}
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main *opts))
-

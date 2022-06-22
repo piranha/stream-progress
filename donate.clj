@@ -419,7 +419,7 @@ html {font-family: Helvetica, Arial, sans-serif;
 strong {color: white}
 
 .embed {border-radius: 1rem;
-        background: #A5A5DB;
+        background: #87CEEB;
         padding: 0.86em;}
 .widget {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
                                            rgba(38, 40, 44, 0) 100%);

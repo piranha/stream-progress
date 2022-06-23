@@ -172,6 +172,19 @@
       (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
 
+(defn telegram! [token chat tx]
+  (let [full  (str "https://api.telegram.org/bot" token
+                   "/sendMessage?chat_id=" chat
+                   "&text=" (codec/form-encode (format "+ %d₴" (long (:amount tx)))))
+        res  @(http/request
+                {:method  :post
+                 :url     full
+                 :timeout 60000})
+        data (-> res :body (json/parse-string true))]
+    (if (= (:status res) 200)
+      data
+      (throw (ex-info (:errorDescription data "Unknown error!") res)))))
+
 
 (def CURRENCY
   {980 "UAH"
@@ -658,7 +671,10 @@ strong {color: white}
                         [:= :account account]
                         [:or
                          [:< :balance_at (:created_at tx)]
-                         [:= :balance_at nil]]]}))
+                         [:= :balance_at nil]]]})
+          (when-let [token (-> (config) :telegram :token)]
+            (when-let [chat (-> (config) :telegram :chat)]
+              (telegram! token chat tx))))
         (when-let [path (get *opts "--json")]
           (write-json path)))
       {:status 200

@@ -9,6 +9,10 @@
           ;; тут у форматі метабейзу, тільда в кінці значить "від цієї
           ;; дати і далі"
           :date nil #_ "2022-06-01~"}
+ :telegram {:token nil #_ "bot-token" ; `nil` - не чіпати телеграм
+            ;; token взяти у https://t.me/botfather
+            ;; chat взяти у браузері https://web.telegram.org/z/#-12312312 
+            :chat nil #_ "chat-id"}
 
  :db             "store.db"
  :target-balance 100000 ; у гривнях

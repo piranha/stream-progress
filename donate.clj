@@ -173,9 +173,12 @@
 
 
 (defn telegram! [token chat tx]
-  (let [full  (str "https://api.telegram.org/bot" token
+  (let [stats (str (t "Зібрано ")
+                   (human-n (:balance tx)) " ₴"
+                   " / " (human-n (:target-balance (config))) " ₴")
+        full  (str "https://api.telegram.org/bot" token
                    "/sendMessage?chat_id=" chat
-                   "&text=" (codec/form-encode (format "+ %d₴" (long (:amount tx)))))
+                   "&text=" (codec/form-encode (format "+ %d₴\n%s" (long (:amount tx)) stats)))
         res  @(http/request
                 {:method  :post
                  :url     full

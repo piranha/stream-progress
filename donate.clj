@@ -40,7 +40,8 @@
    "допоможи ЗСУ"  "and help Ukraine"
    "В середньому " "Average "
    "Максимум від " "Largest "
-   "Зібрано "      "Raised "})
+   "Зібрано "      "Raised "
+   "Долучитися"   "Support"})
 
 
 ;;; Config
@@ -78,6 +79,9 @@
 (def dbpath (rel (Path/of (.toURI (io/file config-path))) (:db (config))))
 (def lang (-> (config) :ui :lang))
 
+(defn donate-url [sendid]
+  (or (-> (config) :ui :donate-url)
+      (format "https://send.monobank.ua/%s" sendid)))
 
 ;;; Core
 
@@ -172,13 +176,18 @@
       (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
 
-(defn telegram! [token chat tx]
-  (let [stats (str (t "Зібрано ")
-                   (human-n (:balance tx)) " ₴"
-                   " / " (human-n (:target-balance (config))) " ₴")
+(defn telegram! [token chat tx stats]
+  (let [total (str (t "Зібрано ")
+                   (human-n (:balance stats)) " ₴ / "
+                   (human-n (:target stats)) " ₴")
+        support (if (true? (-> (config) :telegram :include-donate-url))
+                    (format "\n\n[%s](%s)" (t "Долучитися") (donate-url (:sendid stats)))
+                    "")
         full  (str "https://api.telegram.org/bot" token
                    "/sendMessage?chat_id=" chat
-                   "&text=" (codec/form-encode (format "+ %d₴\n%s" (long (:amount tx)) stats)))
+                   "&parse_mode=MarkdownV2"
+                   "&text="
+                   (codec/form-encode (format "\\+ %d₴\n%s%s" (long (:amount tx)) total support)))
         res  @(http/request
                 {:method  :post
                  :url     full
@@ -390,8 +399,7 @@
        :fill-rule "evenodd"}]]))
 
 (defn qr [sendid]
-  (let [url (or (-> (config) :ui :donate-url)
-                (format "https://send.monobank.ua/%s" sendid))]
+  (let [url (donate-url sendid)]
     (hi/html
       [:a {:href   url
            :target "_blank"}
@@ -677,7 +685,7 @@ strong {color: white}
                          [:= :balance_at nil]]]})
           (when-let [token (-> (config) :telegram :token)]
             (when-let [chat (-> (config) :telegram :chat)]
-              (telegram! token chat tx))))
+              (telegram! token chat tx (get-stats)))))
         (when-let [path (get *opts "--json")]
           (write-json path)))
       {:status 200

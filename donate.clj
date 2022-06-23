@@ -298,22 +298,31 @@
                  DATE (-> (config) :pzh :date)}
         balance (pzh! "/2/card/2" params)
         items   (pzh! "/5/card/5" params)
-        id      (str "pzh-" tag)]
+        id      (str "pzh-" tag)
+        total   (:sum (first balance))
+        last-tx (o! {:from   [:tx]
+                     :select [[(sql/call :max :created_at) :created_at]]
+                     :where  [:= :account id]})]
     (q! {:insert-into :info
          :values      [{:account    id
                         :pan        tag
-                        :balance    (:sum (first balance))
+                        :balance    total
                         :balance_at (now)
                         :updated_at (now)}]
          :upsert      {:on-conflict   [:account]
                        :do-update-set [:balance :balance_at :updated_at]}})
     (when (seq items)
-      (let [txes (mapv (partial pzh-tx id) items)]
+      (let [txes (mapv (partial pzh-tx id) items)
+            txes-new (filter #(> (:created_at %) (:created_at last-tx)) txes)]
         (q! {:insert-into :tx
              :values      txes
              :upsert      {:on-conflict   [:id]
-                           :do-update-set (keys (first txes))}})))))
-
+                           :do-update-set (keys (first txes))}})
+        (when-let [token (-> (config) :telegram :token)]
+          (when-let [chat (-> (config) :telegram :chat)]
+            (doseq [tx txes-new]
+              (telegram! token chat tx {:balance total :target (:target-balance (config))}))))))))
+            
 (comment
   (update-pzh!))
 

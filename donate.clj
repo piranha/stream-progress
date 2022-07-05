@@ -477,6 +477,7 @@ strong {color: white}
   (let [stats     (get-stats)
         donations (q! {:from     [:tx]
                        :select   [:id :amount :orig_amount]
+                       :where    [:> :amount 0]
                        :order-by [[:created_at :desc]]
                        :offset   0
                        :limit    5})

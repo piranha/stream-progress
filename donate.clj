@@ -97,7 +97,7 @@
 
 
 (defn balance [kopeks]
-  (- (quot kopeks 100)
+  (- (quot (or kopeks 0) 100)
      (:start-balance (config) 0)))
 
 

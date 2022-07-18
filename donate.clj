@@ -402,11 +402,24 @@
         ;;[:script {:src "http://localhost:3000/twinspark.js"}]
         [:script {:src "https://kasta-ua.github.io/twinspark-js/twinspark.js"}]
         [:script (hiccup.util/raw-string "
-twinspark.func({retry: function(o) {
+twinspark.func({'retry-req': function(o) {
+  var target = o.el;
+  var e = o.input;
+  // presumably e.type is `ts-req-error`
+  var spec = 'wait ' + e.type + ', retry-req';
+  // this is what makeReq returns
+  var req = {el: target,
+             event: null,
+             url: e.detail.url,
+             method: e.detail.opts.method,
+             batch: e.detail.opts.batch};
+
   //console.log(o);
   setTimeout(function() {
-    twinspark.action(o.el, o.input, o.el.getAttribute('ts-action'), null);
-    twinspark.executeReqs([twinspark.makeReq(o.el)]);
+    // set another retry action
+    twinspark.action(target, e, spec, null);
+    // retry the actual request
+    twinspark.executeReqs([req]);
   }, 1000);
 }});
 ")]
@@ -528,7 +541,7 @@ strong {color: white}
                           :ts-req          (str "progress"
                                              (when embed?
                                                "?embed=1"))
-                          :ts-action       "wait ts-req-error, retry"
+                          :ts-action       "wait ts-req-error, retry-req"
                           :ts-trigger      (if embed?
                                              "load delay 60000"
                                              "load delay 1000")
@@ -719,6 +732,11 @@ strong {color: white}
 
 (defonce *server nil)
 (defonce *scheduler nil)
+
+
+(comment
+  ;; stop server
+  (*server))
 
 
 (defn -main [{:strs [--accounts --json --server --webhook]}]

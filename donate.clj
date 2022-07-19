@@ -40,7 +40,8 @@
    "допоможи ЗСУ"  "and help Ukraine"
    "В середньому " "Average "
    "Максимум від " "Largest "
-   "Зібрано "      "Raised "})
+   "Зібрано "      "Raised "
+   "Долучитися"   "Support"})
 
 
 ;;; Config
@@ -78,6 +79,9 @@
 (def dbpath (rel (Path/of (.toURI (io/file config-path))) (:db (config))))
 (def lang (-> (config) :ui :lang))
 
+(defn donate-url [sendid]
+  (or (-> (config) :ui :donate-url)
+      (format "https://send.monobank.ua/%s" sendid)))
 
 ;;; Core
 
@@ -171,6 +175,27 @@
       data
       (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
+
+(defn telegram! [token chat tx stats]
+  (let [total (str (t "Зібрано ")
+                   (human-n (:balance stats)) " ₴ / "
+                   (human-n (:target stats)) " ₴")
+        support (if (true? (-> (config) :telegram :include-donate-url))
+                    (format "\n\n[%s](%s)" (t "Долучитися") (donate-url (:sendid stats)))
+                    "")
+        full  (str "https://api.telegram.org/bot" token
+                   "/sendMessage?chat_id=" chat
+                   "&parse_mode=MarkdownV2"
+                   "&text="
+                   (codec/form-encode (format "\\+ %d₴\n%s%s" (long (:amount tx)) total support)))
+        res  @(http/request
+                {:method  :post
+                 :url     full
+                 :timeout 60000})
+        data (-> res :body (json/parse-string true))]
+    (if (= (:status res) 200)
+      data
+      (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
 
 (def CURRENCY
@@ -273,22 +298,31 @@
                  DATE (-> (config) :pzh :date)}
         balance (pzh! "/2/card/2" params)
         items   (pzh! "/5/card/5" params)
-        id      (str "pzh-" tag)]
+        id      (str "pzh-" tag)
+        total   (:sum (first balance))
+        last-tx (o! {:from   [:tx]
+                     :select [[(sql/call :max :created_at) :created_at]]
+                     :where  [:= :account id]})]
     (q! {:insert-into :info
          :values      [{:account    id
                         :pan        tag
-                        :balance    (:sum (first balance))
+                        :balance    total
                         :balance_at (now)
                         :updated_at (now)}]
          :upsert      {:on-conflict   [:account]
                        :do-update-set [:balance :balance_at :updated_at]}})
     (when (seq items)
-      (let [txes (mapv (partial pzh-tx id) items)]
+      (let [txes (mapv (partial pzh-tx id) items)
+            txes-new (filter #(> (:created_at %) (:created_at last-tx)) txes)]
         (q! {:insert-into :tx
              :values      txes
              :upsert      {:on-conflict   [:id]
-                           :do-update-set (keys (first txes))}})))))
-
+                           :do-update-set (keys (first txes))}})
+        (when-let [token (-> (config) :telegram :token)]
+          (when-let [chat (-> (config) :telegram :chat)]
+            (doseq [tx txes-new]
+              (telegram! token chat tx {:balance total :target (:target-balance (config))}))))))))
+            
 (comment
   (update-pzh!))
 
@@ -374,8 +408,7 @@
        :fill-rule "evenodd"}]]))
 
 (defn qr [sendid]
-  (let [url (or (-> (config) :ui :donate-url)
-                (format "https://send.monobank.ua/%s" sendid))]
+  (let [url (donate-url sendid)]
     (hi/html
       [:a {:href   url
            :target "_blank"}
@@ -666,7 +699,10 @@ strong {color: white}
                         [:= :account account]
                         [:or
                          [:< :balance_at (:created_at tx)]
-                         [:= :balance_at nil]]]}))
+                         [:= :balance_at nil]]]})
+          (when-let [token (-> (config) :telegram :token)]
+            (when-let [chat (-> (config) :telegram :chat)]
+              (telegram! token chat tx (get-stats)))))
         (when-let [path (get *opts "--json")]
           (write-json path)))
       {:status 200

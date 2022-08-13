@@ -338,7 +338,7 @@
                       :select [[(sql/call :avg :amount) :amount]]
                       :where  [:and
                                [:in :account accs]
-                               [:> :amount 0]]})]
+                               [:> :amount 100]]})]
     {:balance (or (:balance balance) 0)
      :sendid  (:send_id sendid)
      :target  target
@@ -372,6 +372,7 @@
        :d         "M20.4511 0C18.8661 1.80226 17.8947 4.16692 17.8947 6.74889C17.997 12.4368 18.6872 18.112 18.7511 23.8C18.8789 29.0917 17.294 34.0639 15.3639 38.9083C14.712 40.2504 14.0218 41.5669 13.3188 42.8835L11.2737 42.4617C9.42028 42.091 8.21878 40.3015 8.58945 38.4609C8.92178 36.8376 10.3406 35.7256 11.9255 35.7128L12.6669 35.7895L11.0052 21.9083C10.4556 15.7218 7.27291 10.2895 2.56917 6.74892C1.75113 6.14817 0.894735 5.59854 0 5.10005V54.4638H11.4015C12.2579 59.0908 14.8015 63.1172 18.3805 65.8908C19.2368 66.466 19.9398 67.2457 20.4511 68.1532C20.9624 67.2457 21.6654 66.466 22.5218 65.8908C26.1008 63.1171 28.6444 59.0908 29.5007 54.4638H40.9023V5.10005C40.0075 5.59855 39.1511 6.14817 38.3331 6.74892C33.6293 10.2895 30.4466 15.7219 29.897 21.9083L28.2354 35.7895L28.9767 35.7128C30.5617 35.7256 31.9805 36.8376 32.3128 38.4609C32.6835 40.3015 31.482 42.091 29.6286 42.4617L27.5835 42.8835C26.8805 41.5669 26.1902 40.2504 25.5384 38.9083C23.6083 34.0639 22.0233 29.0918 22.1512 23.8C22.2151 18.112 22.9053 12.4368 23.0075 6.74889C23.0075 4.16693 22.0361 1.80226 20.4512 0H20.4511ZM3.41276 12.2196C5.62403 14.8015 7.10674 18.0226 7.54133 21.5759L8.909 33.0414C7.17065 33.9105 5.84133 35.4955 5.34283 37.4128H3.41276V12.2195V12.2196ZM37.4894 12.2196V37.4128H35.5594C35.0609 35.4955 33.7316 33.9106 31.9932 33.0414L33.3609 21.576C33.7955 18.0226 35.2782 14.8015 37.4894 12.2196V12.2196ZM20.4511 35.2526C21.3586 38.2436 22.624 41.0812 24.1834 43.7271C22.7007 44.1872 21.397 45.0692 20.4511 46.2451C19.5052 45.0564 18.2015 44.1872 16.7188 43.7271C18.2782 41.0812 19.5436 38.2436 20.4511 35.2526ZM3.41276 40.8256H5.34283C5.95637 43.1775 7.78419 45.0436 10.1233 45.6827L11.7594 46.0662C11.3248 47.6511 11.0819 49.3256 11.0819 51.0512H3.41279V40.8256L3.41276 40.8256ZM35.5593 40.8256H37.4894V51.0511H29.8203C29.8203 49.3256 29.5774 47.6511 29.1428 46.0662L30.7789 45.6827C33.1052 45.0436 34.9458 43.1774 35.5594 40.8256L35.5593 40.8256ZM15.0955 46.8459C17.1533 47.1399 18.7511 48.9038 18.7511 51.0512H14.4947C14.4947 49.594 14.712 48.188 15.0955 46.8459ZM25.8067 46.8459C26.1902 48.188 26.4075 49.594 26.4075 51.0512H22.1511C22.1511 48.9038 23.7488 47.1399 25.8067 46.8459ZM14.8781 54.4639H18.7511V61.6346C16.8721 59.6662 15.5044 57.1993 14.8781 54.4639ZM22.1511 54.4639H26.024C25.3977 57.1993 24.03 59.6662 22.1511 61.6346V54.4639Z",
        :clip-rule "evenodd",
        :fill-rule "evenodd"}]]))
+
 
 (defn qr [sendid]
   (let [url (or (-> (config) :ui :donate-url)
@@ -426,25 +427,36 @@ twinspark.func({'retry-req': function(o) {
 
         [:style "
 html {font-family: Helvetica, Arial, sans-serif;
-      font-size: 14px;
+      font-size:   14px;
       line-height: 1.36em}
 
 strong {color: white}
 
 .embed {border-radius: 1rem;
-        background: #87CEEB;
-        padding: 0.86em;
-        padding-left: 0;}
-.widget {background: linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
-                                           rgba(38, 40, 44, 0) 100%);
-         color: rgba(255, 255, 255, 0.8);
-         position: fixed; bottom:0; left:0; right:0;
-         padding: 0.86em;
-         min-height: 6.86em;
-         font-size: 24px;
+        background:    #87CEEB;
+        padding:       0.86em;
+        padding-left:  0;}
+.widget {background:  linear-gradient(360deg, rgba(38, 40, 44, 0.8) 0%,
+                                             rgba(38, 40, 44, 0) 100%);
+         color:       rgba(255, 255, 255, 0.8);
+         position:    fixed; bottom:0; left:0; right:0;
+         padding:     0.86em;
+         min-height:  6.86em;
+         font-size:   24px;
          line-height: 1.36em}
 
-.enable-shadow .shadow { text-shadow: 0 0 10px black; }
+.icon {height: 1.2em; display: inline-block; vertical-align: middle;}
+.pill-height {height: 1.48em;}
+.pill {height:        1.48em;
+       box-sizing:    border-box;
+       background:    rgba(68, 190, 89, 0.5);
+       display:       inline-block;
+       padding:       0 0.57em;
+       margin-left:   0.57em;
+       border:        1px solid #44BE59;
+       border-radius: 0.68em;}
+
+.enable-shadow .shadow {text-shadow: 0 0 10px black;}
 .flex {display: flex; align-items: center;}
 .grow {flex-grow: 1;}
 .justify-between {justify-content: space-between; }
@@ -455,32 +467,34 @@ strong {color: white}
 .text-right {text-align: right;}
 
 .ts-enter.pill {
-  animation: animate-pop 0.5s;
+  animation-name: animate-pop;
+  animation-duration: 0.5s;
   animation-timing-function: cubic-bezier(.26, .53, .74, 1.48);
+}
+
+.ts-enter.pill.k1 {
+  animation-name: animate-pop, animate-color-1;
 }
 
 @keyframes animate-pop {
   0%   { opacity: 0; transform: scale(0.5, 0.5); }
   100% { opacity: 1; transform: scale(1, 1); }
 }
+
+@keyframes animate-color-1 {
+  0%   { background: rgba(152, 190, 68, 0.5); }
+  100% { background: red; }
+}
 "]]
        [:body {} content]])))
 
 
-(def donation-pill-height "1.48em")
-
 (defn donation-pill [{:keys [id amount orig_amount]}]
   (hi/html
     [:div.pill {:id    id
-                :style {:height        donation-pill-height
-                        :box-sizing    "border-box"
-                        :display       "inline-block"
-                        :padding       "0 0.57em"
-                        :margin-left   "0.57em"
-                        :margin-bottom "1em"
-                        :background    "rgba(68, 190, 89, 0.5)"
-                        :border        "1px solid #44BE59"
-                        :border-radius "0.68em"}}
+                :class (cond
+                         (> amount 5000) "k5"
+                         (> amount 1000) "k1")}
      [:strong (hutil/raw-string (if orig_amount
                                   (format "+&nbsp;%s" orig_amount)
                                   (format "+&nbsp;%d₴" (long amount))))]]))
@@ -496,7 +510,7 @@ strong {color: white}
                        :limit    5})
         progress  (* 100 (/ (float (:balance stats)) (:target stats)))]
     (hi/html
-      [:div.ml-1.grow {:style (when-not embed? {:max-width "33.75em"})}
+      [:div.ml-1.grow {:style (when-not embed? {:max-width "35em"})}
 
        [:div.justify-between.flex {:style {:margin-bottom "0.36em"}}
 
@@ -506,7 +520,8 @@ strong {color: white}
          [:strong (human-n (:balance stats)) " ₴"]
          " / " (human-n (:target stats)) " ₴"]
 
-        [:div.overflow-hidden.text-right {:style {:height donation-pill-height}}
+        [:div.overflow-hidden.text-right.pill-height
+         #_(donation-pill {:id (rand-int 100) :amount 2000})
          (for [d donations]
            (donation-pill d))]]
 
@@ -517,13 +532,28 @@ strong {color: white}
         [:div {:id    :progress-bar
                :style {:height        "100%"
                        :border-radius "0.68em"
-                       :background    "#44BE59"
+                       :position      "relative"
+                       :background    (if (< progress 100)
+                                        "#44BE59"
+                                        (format "linear-gradient(to right, #44BE59 %s%%, #418265 0)"
+                                          (/ 10000.0 progress)))
                        :display       "inline-block"
-                       :width         (format "%s%%" progress)
-                       :transition    "width 0.5s ease"
-                       :text-align    "right"
-                       :padding       "0 0.57em"}}
-         [:strong {:style {:font-size "0.86em"}}
+                       :width         (format "%s%%" (min 100 progress))
+                       :transition    "width 0.7s ease"
+                       :text-align    "right"}}
+         [:span {:style {:font-size     "0.86em"
+                         :position      "absolute"
+                         :right         (str (- 100 (/ 10000.0 progress)) "%")
+                         :border-right  "solid #58D642 1px"
+                         :padding-right "0.1em"}}
+          (if (> progress 115)
+            "100%"
+            " ")]
+         [:strong {:style {:font-size "0.86em"
+                           :margin    "0 0.57em"}}
+          (when (> progress 100)
+            [:img.icon {:style {:height "100%;"}
+                        :src   "https://www.webfx.com/wp-content/themes/fx/assets/img/tools/emoji-cheat-sheet/graphics/emojis/godmode.png"}])
           (format "%.2f%%" progress)]]]])))
 
 

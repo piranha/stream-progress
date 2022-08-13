@@ -547,7 +547,8 @@ strong {color: white}
                                              "load delay 1000")
                           ;;:ts-trigger      "click"
                           :ts-req-selector "#show"
-                          :style           {:align-items "flex-end"}}
+                          :style           (cond-> "align-items: flex-end;"
+                                             embed? (str (-> (config) :ui :embed-style)))}
 
           (when-not embed?
             [:div.qr {:style {:height        "6.86em"

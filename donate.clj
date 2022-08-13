@@ -529,6 +529,7 @@ strong {color: white}
 
 (defn progress [req]
   (let [embed? (contains? (:query-params req) "embed")
+        debug? (contains? (:query-params req) "debug")
         stats  (get-stats)]
     {:status  200
      :headers {"Content-Type" "text/html"}
@@ -539,12 +540,13 @@ strong {color: white}
                                              "embed"
                                              "widget enable-shadow")
                           :ts-req          (str "progress"
-                                             (when embed?
-                                               "?embed=1"))
+                                             (when embed? "?embed=1")
+                                             (when debug? "?debug=1"))
                           :ts-action       "wait ts-req-error, retry-req"
-                          :ts-trigger      (if embed?
-                                             "load delay 60000"
-                                             "load delay 1000")
+                          :ts-trigger      (cond
+                                             debug? "click"
+                                             embed? "load delay 60000"
+                                             :else  "load delay 1000")
                           ;;:ts-trigger      "click"
                           :ts-req-selector "#show"
                           :style           (cond-> "align-items: flex-end;"

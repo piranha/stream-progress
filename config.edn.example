@@ -19,4 +19,5 @@
  :ui {:lang         :uk ; або :en
       :donate-url   nil ; урл, куди вести QR-код, якщо лінк на монобанк не підходить
       :donate-label "допоможи ЗСУ"
-      :embed-style  nil}} ; додаткові стилі для `?embed=1`
+      :embed-style  nil
+      :pyro-step    50000}} ; додаткові стилі для `?embed=1`

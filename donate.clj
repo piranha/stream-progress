@@ -425,7 +425,7 @@ twinspark.func({'retry-req': function(o) {
 }});
 ")]
 
-        [:style "
+        [:style (hutil/raw-string "
 html {font-family: Helvetica, Arial, sans-serif;
       font-size:   14px;
       line-height: 1.36em}
@@ -482,11 +482,54 @@ strong {color: white}
 }
 
 @keyframes animate-color-1 {
-  0%   { background: rgba(152, 190, 68, 0.5); }
-  100% { background: red; }
+  0%, 30% { background: rgba(152, 190, 68, 0.5); }
+  50%  { background: rgba(190, 68, 169, 0.5); }
+  100% { background: rgba(152, 190, 68, 0.5); }
 }
-"]]
+")]]
        [:body {} content]])))
+
+
+(defn fireworks [x]
+  [:div.pyro {:id x}
+   [:style (hutil/raw-string "
+.ts-enter.pyro > .before, .ts-enter.pyro > .after {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  box-shadow: 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff, 0 0 #fff;
+  animation: 1s bang ease-out 5 backwards, 1s gravity ease-in 5 backwards, 5s position linear 1 backwards;
+  animation-iteration-count: 5, 5, 1;
+}
+
+.ts-enter.pyro > .after {
+  animation-delay: 1.25s, 1.25s, 1.25s;
+  animation-duration: 1.25s, 1.25s, 6.25s;
+}
+
+@keyframes bang {
+  to {
+    box-shadow: 68px -168px #009dff, 190px -193px #ff00bb, -240px 4px #00ff11, -197px -41px #ffcc00, -244px -271px #006fff, 141px -45px #ff00ae, -60px -91px #a200ff, -121px -156px #ff8800, -76px -382px #00ffcc, -172px -326px #00d0ff, -169px -358px #8800ff, -198px -305px #00ff1e, 214px -84px #008cff, 215px -172px #ae00ff, 28px 19px #ffcc00, 90px -265px #00ffd0, -246px -326px #0048ff, 149px 63px red, -107px -411px #ff9500, -149px -307px #ff4000, -160px 41px #00ffae, 143px 14px #ff8400, -142px -130px #ff00d5, -6px -87px #00d0ff, 64px -49px #ff6600, 88px -355px #59ff00, -163px -261px #55ff00, 141px -403px #ff8800, -7px 7px aqua, -52px -145px #ff0400, 214px -229px #d5ff00, 27px -108px blue, -105px 40px #ae00ff, 37px -136px #00a6ff, 231px -78px #ee00ff, 56px -22px #00ff04, 185px -229px #ff2f00, 201px -202px #ff0400, -221px -296px #3700ff, -87px -321px #44ff00, 71px 73px #00d9ff, -38px -285px #ff9500, -3px -258px red, 133px -340px #00ffc4, 77px -188px #00ff55, -127px -316px #ffe600, 54px -24px #ddff00, -223px -107px #0080ff, 84px -305px #0055ff, 93px -326px #00ffaa, -212px -171px #ffcc00;
+  }
+}
+
+@keyframes gravity {
+  to {
+    transform: translateY(200px);
+    opacity: 0;
+  }
+}
+
+@keyframes position {
+  0%, 19.9%  { margin-top: 10%; margin-left: 40%; }
+  20%, 39.9% { margin-top: 40%; margin-left: 30%; }
+  40%, 59.9% { margin-top: 20%; margin-left: 70%; }
+  60%, 79.9% { margin-top: 30%; margin-left: 20%; }
+  80%, 99.9% { margin-top: 30%; margin-left: 80%; }
+}")]
+   [:div.before]
+   [:div.after]])
 
 
 (defn donation-pill [{:keys [id amount orig_amount]}]
@@ -521,7 +564,7 @@ strong {color: white}
          " / " (human-n (:target stats)) " ₴"]
 
         [:div.overflow-hidden.text-right.pill-height
-         #_(donation-pill {:id (rand-int 100) :amount 2000})
+         #_(donation-pill {:id "qwe2" :amount 2000})
          (for [d donations]
            (donation-pill d))]]
 
@@ -541,76 +584,85 @@ strong {color: white}
                        :width         (format "%s%%" (min 100 progress))
                        :transition    "width 0.7s ease"
                        :text-align    "right"}}
-         [:span {:style {:font-size     "0.86em"
-                         :position      "absolute"
-                         :right         (str (- 100 (/ 10000.0 progress)) "%")
-                         :border-right  "solid #58D642 1px"
-                         :padding-right "0.1em"}}
-          (if (> progress 115)
-            "100%"
-            " ")]
+
          [:strong {:style {:font-size "0.86em"
                            :margin    "0 0.57em"}}
           (when (> progress 100)
             [:img.icon {:style {:height "100%;"}
                         :src   "https://www.webfx.com/wp-content/themes/fx/assets/img/tools/emoji-cheat-sheet/graphics/emojis/godmode.png"}])
-          (format "%.2f%%" progress)]]]])))
+          (format "%.2f%%" progress)]
+
+         (when (> progress 100)
+           [:span {:style {:font-size     "0.86em"
+                           :position      "absolute"
+                           :right         (str (- 100 (/ 10000.0 progress)) "%")
+                           :border-right  "solid #58D642 1px"
+                           :padding-right "0.1em"}}
+            (if (> progress 120)
+              "100%"
+              " ")])]]])))
 
 
 (defn progress [req]
-  (let [embed? (contains? (:query-params req) "embed")
-        debug? (contains? (:query-params req) "debug")
-        stats  (get-stats)]
+  (let [embed?    (contains? (:query-params req) "embed")
+        debug?    (contains? (:query-params req) "debug")
+        stats     (get-stats)
+        pyro-step (-> (config) :ui (:pyro-step 50000))]
     {:status  200
      :headers {"Content-Type" "text/html"}
      :body
      (base
        (hi/html
-         [:div#show.flex {:class           (if embed?
-                                             "embed"
-                                             "widget enable-shadow")
-                          :ts-req          (str "progress"
-                                             (when embed? "?embed=1")
-                                             (when debug? "?debug=1"))
-                          :ts-action       "wait ts-req-error, retry-req"
-                          :ts-trigger      (cond
-                                             debug? "click"
-                                             embed? "load delay 60000"
-                                             :else  "load delay 1000")
-                          ;;:ts-trigger      "click"
-                          :ts-req-selector "#show"
-                          :style           (cond-> "align-items: flex-end;"
-                                             embed? (str (-> (config) :ui :embed-style)))}
+         [:div#main {:ts-req          (str "progress"
+                                        (when embed? "?embed=1")
+                                        (when debug? "?debug=1"))
+                     :ts-action       "wait ts-req-error, retry-req"
+                     :ts-trigger      (cond
+                                        debug? "click"
+                                        embed? "load delay 60000"
+                                        :else  "load delay 1000")
+                     ;;:ts-trigger      "click"
+                     :ts-req-selector "#main"}
 
-          (when-not embed?
-            [:div.qr {:style {:height        "6.86em"
-                              :width         "6.86em"
-                              :border-radius "0.57em"
-                              :background    "white"}}
-             (qr (:sendid stats))])
+          #_(fireworks 3)
+          (for [x (range (dec pyro-step) (:balance stats) pyro-step)]
+            (fireworks x))
 
+          [:div.flex {:class (if embed?
+                               "embed"
+                               "widget enable-shadow")
+                      :style (cond-> "align-items: flex-end;"
+                               embed? (str (-> (config) :ui :embed-style)))}
 
-          [:div.justify-between.grow
-           {:class (when-not embed? "flex")
-            :style {:max-width "100%"}}
            (when-not embed?
-             [:div.title.flex.ml-1
-              logo ;; Державний герб України
-              [:span.ml-1.shadow
-               (t "Скануй та ") [:br] (or (-> (config) :ui :donate-label)
-                                          (t "допоможи ЗСУ"))]])
+             [:div.qr {:style {:height        "6.86em"
+                               :width         "6.86em"
+                               :border-radius "0.57em"
+                               :background    "white"}}
+              (qr (:sendid stats))])
 
-           (progress-bar embed?)
 
-           ;; stats
-           [:div.ml-1.shadow.nowrap {:class (if embed?
-                                              "mt-1"
-                                              "text-right")}
-            [:div (t "В середньому ") [:strong (format "%d ₴" (:avg stats))]]
-            [:div (t "Максимум від ")
-             [:strong (:maxname stats)]
-             " "
-             [:strong (:max stats) " ₴"]]]]]))}))
+           [:div.justify-between.grow
+            {:class (when-not embed? "flex")
+             :style {:max-width "100%"}}
+            (when-not embed?
+              [:div.title.flex.ml-1
+               logo ;; Державний герб України
+               [:span.ml-1.shadow
+                (t "Скануй та ") [:br] (or (-> (config) :ui :donate-label)
+                                           (t "допоможи ЗСУ"))]])
+
+            (progress-bar embed?)
+
+            ;; stats
+            [:div.ml-1.shadow.nowrap {:class (if embed?
+                                               "mt-1"
+                                               "text-right")}
+             [:div (t "В середньому ") [:strong (format "%d ₴" (:avg stats))]]
+             [:div (t "Максимум від ")
+              [:strong (:maxname stats)]
+              " "
+              [:strong (:max stats) " ₴"]]]]]]))}))
 
 
 (defn input-t [content]

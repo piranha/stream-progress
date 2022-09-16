@@ -620,8 +620,7 @@ strong {color: white}
                      :ts-trigger      (cond
                                         debug? "click"
                                         embed? "load delay 60000"
-                                        :else  "load delay 1000")
-                     ;;:ts-trigger      "click"
+                                        :else  "load delay 5000")
                      :ts-req-selector "#main"}
 
           #_(fireworks 3)

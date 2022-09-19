@@ -746,7 +746,7 @@ strong {color: white}
 (defn webhook [req]
   (case (:request-method req)
     :get {:status 200
-          :body "ok"}
+          :body   "ok"}
     :post
     (let [data    (:data (json/parse-stream
                            (io/reader (:body req) :encoding "UTF-8")
@@ -754,20 +754,23 @@ strong {color: white}
           account (:account data)]
       (when (= account (-> (config) :mono :account))
         (let [tx (mono-tx account (:statementItem data))]
-          (q! {:insert-into :tx
-               :values      [tx]})
-          (q! {:update :info
-               :set    {:balance    (:balance tx)
-                        :balance_at (:created_at tx)}
-               :where  [:and
-                        [:= :account account]
-                        [:or
-                         [:< :balance_at (:created_at tx)]
-                         [:= :balance_at nil]]]}))
+          (when (pos? (:amount tx))
+            (q! {:insert-into :tx
+                 :values      [tx]})
+            (q! {:from   [:tx]
+                 :update :info
+                 :where  [:and
+                          [:= :tx.account account]
+                          [:= :info.account account]
+                          [:or
+                           [:< :info.balance_at (:created_at tx)]
+                           [:= :info.balance_at nil]]]
+                 :set    {:balance    [(sql/call :sum :tx.amount)]
+                          :balance_at (:created_at tx)}})))
         (when-let [path (get *opts "--json")]
           (write-json path)))
       {:status 200
-       :body "ok"})))
+       :body   "ok"})))
 
 
 (defn -app [req]

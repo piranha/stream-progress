@@ -765,7 +765,7 @@ strong {color: white}
                           [:or
                            [:< :info.balance_at (:created_at tx)]
                            [:= :info.balance_at nil]]]
-                 :set    {:balance    [(sql/call :sum :tx.amount)]
+                 :set    {:balance    (sql/call :sum :tx.amount)
                           :balance_at (:created_at tx)}})))
         (when-let [path (get *opts "--json")]
           (write-json path)))

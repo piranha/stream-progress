@@ -30,7 +30,7 @@
   '[ring.util.codec :as codec]
   '[ring.middleware.params :as ring-params])
 
-(alter-var-root #'log/*config* #(assoc % :min-level :info))
+(alter-var-root #'log/*config* #(assoc % :min-level :debug))
 
 
 ;;; i18n
@@ -90,7 +90,11 @@
   (let [query (if (map? query)
                 (sql/format query)
                 query)]
-    (sqlite/query dbpath query)))
+    (try
+      (sqlite/query dbpath query)
+      (catch Exception e
+        (prn "ERROR QUERY" query)
+        (throw e)))))
 
 
 (defn o! [query] (first (q! query)))
@@ -172,6 +176,25 @@
       (throw (ex-info (:errorDescription data "Unknown error!") res)))))
 
 
+(defn insert-txs [txs]
+  (when-let [txs (not-empty (filter #(pos? (:amount %)) txs))]
+    (q! {:insert-into :tx
+         :values      txs
+         :upsert      {:on-conflict   [:id]
+                       :do-update-set (keys (first txs))}})
+    (q! {:update :info
+         :from   [[{:from     [:tx]
+                    :select   [:tx.account
+                               [(sql/call :sum :tx.amount) :balance]
+                               [(sql/call :max :tx.created_at) :created_at]
+                               [(sql/call :max :tx.updated_at) :updated_at]]
+                    :group-by [:account]}
+                   :data]]
+         :set    {:balance    :data.balance
+                  :balance_at :data.created_at
+                  :updated_at :data.updated_at}
+         :where [:= :info.account :data.account]})))
+
 
 (def CURRENCY
   {980 "UAH"
@@ -211,11 +234,7 @@
           acc        (->> (concat (:accounts res) (:jars res))
                           (filter #(= (:id %) id))
                           first)
-          last-tx    (o! {:from   [:tx]
-                          :select [[(sql/call :max :updated_at) :updated_at]]
-                          :where  [:= :account id]})
-          since-time (or (:updated_at last-tx)
-                         (->seconds (-> (config) :mono :since))
+          since-time (or (->seconds (-> (config) :mono :since))
                          (- (now) (* 30 DAY)))
           items      (mono! :get (format "/personal/statement/%s/%s"
                                    id since-time))]
@@ -229,11 +248,9 @@
                           :balance_at (now)
                           :updated_at (now)}]
            :upsert      {:on-conflict   [:account]
-                         :do-update-set [:pan :send_id :iban :balance
+                         :do-update-set [:pan :send_id :iban
                                          :balance_at :updated_at]}})
-      (when (seq items)
-        (q! {:insert-into :tx
-             :values      (mapv (partial mono-tx id) items)})))))
+      (insert-txs (mapv #(mono-tx id %) items)))))
 
 
 (comment
@@ -282,12 +299,8 @@
                         :updated_at (now)}]
          :upsert      {:on-conflict   [:account]
                        :do-update-set [:balance :balance_at :updated_at]}})
-    (when (seq items)
-      (let [txes (mapv (partial pzh-tx id) items)]
-        (q! {:insert-into :tx
-             :values      txes
-             :upsert      {:on-conflict   [:id]
-                           :do-update-set (keys (first txes))}})))))
+    (insert-txs (mapv #(pzh-tx id %) items))))
+
 
 (comment
   (update-pzh!))
@@ -679,24 +692,13 @@ strong {color: white}
 (defn input [{:keys [request-method form-params]}]
   (if (= request-method :post)
     (try
-      (o! {:insert-into :tx
-           :values
-           [{:account    (manual)
-             :id         (str (random-uuid))
-             :amount     (Long. (get form-params "amount"))
-             :desc       (get form-params "desc")
-             :comment    (get form-params "orig")
-             :created_at (now)
-             :updated_at (now)}]})
-      (o! {:insert-into :info
-           :values      [{:account    (manual)
-                          :balance_at (now)
-                          :updated_at (now)
-                          :balance    {:from   [:tx]
-                                       :select [(sql/call :sum :amount)]
-                                       :where  [:= :account (manual)]}}]
-           :upsert      {:on-conflict   [:account]
-                         :do-update-set [:balance_at :updated_at :balance]}})
+      (insert-txs [{:account    (manual)
+                    :id         (str (random-uuid))
+                    :amount     (Long. (get form-params "amount"))
+                    :desc       (get form-params "desc")
+                    :comment    (get form-params "orig")
+                    :created_at (now)
+                    :updated_at (now)}])
       (when-let [path (get *opts "--json")]
         (write-json path))
       {:status  301
@@ -706,8 +708,8 @@ strong {color: white}
         {:status  400
          :headers {"Content-Type" "text/html"}
          :body    (input-t
-                 (hi/html [:code [:pre (with-out-str
-                                         (st/print-stack-trace e))]]))}))
+                    (hi/html [:code [:pre (with-out-str
+                                            (st/print-stack-trace e))]]))}))
     (let [txs (q! {:from   [:tx]
                    :select [:amount :desc :comment]
                    :where  [:= :account (manual)]})]
@@ -718,6 +720,23 @@ strong {color: white}
                    [:tr [:th "Сума, грн"] [:th "Відправник"] [:th "Оригінальна сума"]]
                    (for [tx txs]
                      [:tr [:td (:amount tx)] [:td (:desc tx)] [:td (:comment tx)]])])})))
+
+
+(defn webhook [req]
+  (case (:request-method req)
+    :get {:status 200
+          :body   "ok"}
+    :post
+    (let [data    (:data (json/parse-stream
+                           (io/reader (:body req) :encoding "UTF-8")
+                           true))
+          account (:account data)]
+      (when (= account (-> (config) :mono :account))
+        (insert-txs [(mono-tx account (:statementItem data))])
+        (when-let [path (get *opts "--json")]
+          (write-json path)))
+      {:status 200
+       :body   "ok"})))
 
 
 (defn embed-js
@@ -743,41 +762,7 @@ strong {color: white}
 " url)}))
 
 
-(defn webhook [req]
-  (case (:request-method req)
-    :get {:status 200
-          :body   "ok"}
-    :post
-    (let [data    (:data (json/parse-stream
-                           (io/reader (:body req) :encoding "UTF-8")
-                           true))
-          account (:account data)]
-      (when (= account (-> (config) :mono :account))
-        (let [tx (mono-tx account (:statementItem data))]
-          (when (pos? (:amount tx))
-            (q! {:insert-into :tx
-                 :values      [tx]})
-            (q! {:from   [:tx]
-                 :update :info
-                 :where  [:and
-                          [:= :tx.account account]
-                          [:= :info.account account]
-                          [:or
-                           [:< :info.balance_at (:created_at tx)]
-                           [:= :info.balance_at nil]]]
-                 :set    {:balance    (sql/call :sum :tx.amount)
-                          :balance_at (:created_at tx)}})))
-        (when-let [path (get *opts "--json")]
-          (write-json path)))
-      {:status 200
-       :body   "ok"})))
-
-
 (defn -app [req]
-  (let [method (.toUpperCase (name (:request-method req)))]
-    (if (= method "GET")
-      (log/debug method (:uri req))
-      (log/info method (:uri req))))
   (case (:uri req)
     "/progress" (progress req)
     "/webhook"  (webhook req)
@@ -786,7 +771,19 @@ strong {color: white}
     {:status 404
      :body   "Not Found\n"}))
 
+
+(defn log-req [handler]
+  (fn [req]
+    (let [method (.toUpperCase (name (:request-method req)))
+          res    (handler req)]
+      (if (= method "GET")
+        (log/debug method (:uri req) "-" (:status res))
+        (log/info method (:uri req) "-" (:status res)))
+      res)))
+
+
 (def app (-> -app
+             log-req
              ring-params/wrap-params))
 
 

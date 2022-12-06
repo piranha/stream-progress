@@ -1,7 +1,7 @@
 ;; -*- mode: clojure -*-
 {:mono   {:token   nil #_ "from api.monobank.ua" ; `nil` - не чіпати моно
           ;; це `id` аккаунта в монобанку
-          :account "Run this: bb donate.clj --accounts true"
+          :account "Run to see account ids: bb donate.clj --accounts true"
           ;; це потрібно якщо треба обмежити історію транзакцій, UTC
           :since   nil #_ "2022-06-01T00:00:00Z"}
  :manual {:name "manual"}

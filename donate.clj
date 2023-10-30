@@ -414,7 +414,7 @@
         [:meta {:charset "utf-8"}]
         [:meta {:name "viewport" :content "width=device-width,initial-scale=1.0"}]
         ;;[:script {:src "http://localhost:3000/twinspark.js"}]
-        [:script {:src "https://kasta-ua.github.io/twinspark-js/twinspark.js"}]
+        [:script {:src "https://twinspark.js.org/static/twinspark.js"}]
         [:script (hiccup.util/raw-string "
 twinspark.func({'retry-req': function(o) {
   var target = o.el;
